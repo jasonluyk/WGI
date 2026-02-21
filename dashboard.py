@@ -335,8 +335,8 @@ with tab4:
                     )
                     st.success("✅ State Latched to Database")
                     st.rerun()
-            except Exception as e:
-                    st.error(f"Sync Fault: {e}")
+        except Exception as e:
+            st.error(f"Sync Fault: {e}")
 
         # System Status Indicator
         st.divider()
