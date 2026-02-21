@@ -6,13 +6,13 @@ import subprocess
 import pandas as pd
 from datetime import datetime
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
-import asyncio
+#from playwright.sync_api import sync_playwright
+#import asyncio
 import sys
 
 # Windows compatibility fix for Playwright and Streamlit
-if sys.platform == 'win32':
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+#if sys.platform == 'win32':
+   # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 

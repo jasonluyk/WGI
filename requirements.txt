@@ -3,5 +3,5 @@ pandas
 requests
 beautifulsoup4
 pymongo
-playwright
+
 subprocess
