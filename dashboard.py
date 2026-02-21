@@ -316,26 +316,35 @@ with tab4:
             selected_show = st.selectbox("Select Competition:", show_names)
             
             if st.button("🚀 Sync Full Show Map"):
-                # ... (Your existing pull_dual_event_data call) ...
-                if not df.empty:
-                    st.session_state.active_event_data = df
-                    st.session_state.finals_slots = slots
-                    st.session_state.active_event_name = selected_show
-                    
-                    # LATCH TO DB: Save this session for persistence
-                    db["live_state"].update_one(
-                        {"type": "current_session"},
-                        {"$set": {
-                            "name": selected_show,
-                            "slots": slots,
-                            "data": df.to_dict("records"),
-                            "last_updated": datetime.now()
-                        }},
-                        upsert=True
-                    )
-                    st.success("✅ State Latched to Database")
-                    st.rerun()
-       
+                try:
+                    target = next(e for e in st.session_state.found_events if e['name'] == selected_show)
+                    with st.spinner(f"Probing {selected_show}..."):
+                        # Dual-Link Routing logic
+                        if isinstance(target['url'], dict):
+                            df, slots = pull_dual_event_data(target['url']['prelims'], target['url']['finals'])
+                        else:
+                            df, slots = pull_dual_event_data(target['url'], "")
+                        
+                        if not df.empty:
+                            st.session_state.active_event_data = df
+                            st.session_state.finals_slots = slots
+                            st.session_state.active_event_name = selected_show
+                            
+                            # LATCH TO DB: Save this session for persistence
+                            db["live_state"].update_one(
+                                {"type": "current_session"},
+                                {"$set": {
+                                    "name": selected_show,
+                                    "slots": slots,
+                                    "data": df.to_dict("records"),
+                                    "last_updated": datetime.now()
+                                }},
+                                upsert=True
+                            )
+                            st.success("✅ State Latched to Database")
+                            st.rerun()
+                except Exception as e:
+                    st.error(f"Sync Fault: {e}")
 
         # System Status Indicator
         st.divider()
