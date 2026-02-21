@@ -58,6 +58,21 @@ client = init_connection()
 db = client["rankings_2026"]
 collection = db["wgi_analytics"]
 
+# --- PERSISTENCE LATCH: Restore State from DB ---
+if "active_event_data" not in st.session_state:
+    # Look for the last saved 'Live State' in the database
+    saved_state = db["live_state"].find_one({"type": "current_session"})
+    
+    if saved_state:
+        st.session_state.active_event_data = pd.DataFrame(saved_state['data'])
+        st.session_state.finals_slots = saved_state['slots']
+        st.session_state.active_event_name = saved_state['name']
+    else:
+        st.session_state.active_event_data = pd.DataFrame()
+        st.session_state.finals_slots = {}
+        st.session_state.active_event_name = "No Active Event"
+
+
 # --- 3. Functional Logic ---
 
 def sync_to_cloud(df):
@@ -279,44 +294,47 @@ with tab3:
 
 # --- TAB 4: ADMIN ---
 with tab4:
-    st.header("🔐 System Admin")
+    # Check if we are already authenticated
     if not st.session_state.get('admin_logged_in', False):
-        admin_pwd = st.text_input("Admin Password", type="password")
-        if st.button("Login"):
+        st.header("🔐 Admin Access")
+        admin_pwd = st.text_input("Enter System Password", type="password")
+        if st.button("Authorize"):
             if admin_pwd == st.secrets["ADMIN_PASS"]:
                 st.session_state.admin_logged_in = True
-                st.rerun()
+                st.rerun() # Re-draw the UI in 'Authenticated' mode
+            else:
+                st.error("Invalid Credentials")
     else:
-        st.success("Authenticated: Admin Mode Active")
+        # --- AUTHENTICATED AREA ---
+        st.success("🛰️ System Link Established")
         if st.button("Logout"):
             st.session_state.admin_logged_in = False
             st.rerun()
-
-        st.divider()
-        if st.button("📂 Load Season Manifest"):
-            st.session_state.found_events = get_manifest_events()
-            st.success(f"Loaded {len(st.session_state.found_events)} events.")
 
         if 'found_events' in st.session_state:
             show_names = [e['name'] for e in st.session_state.found_events]
             selected_show = st.selectbox("Select Competition:", show_names)
             
-            if st.button("🚀 Sync Full Show Map"):
-                try:
-                    target = next(e for e in st.session_state.found_events if e['name'] == selected_show)
-                    with st.spinner(f"Probing {selected_show}..."):
-                        # Dual-Link Routing logic
-                        if isinstance(target['url'], dict):
-                            df, slots = pull_dual_event_data(target['url']['prelims'], target['url']['finals'])
-                        else:
-                            df, slots = pull_dual_event_data(target['url'], "")
-                        
-                        if not df.empty:
-                            st.session_state.active_event_data = df
-                            st.session_state.finals_slots = slots
-                            st.session_state.active_event_name = selected_show
-                            st.success(f"✅ Latch Complete: {len(df)} guards mapped.")
-                            st.rerun()
+        if st.button("🚀 Sync Full Show Map"):
+            # ... (Your existing pull_dual_event_data call) ...
+            if not df.empty:
+                st.session_state.active_event_data = df
+                st.session_state.finals_slots = slots
+                st.session_state.active_event_name = selected_show
+                
+                # LATCH TO DB: Save this session for persistence
+                db["live_state"].update_one(
+                    {"type": "current_session"},
+                    {"$set": {
+                        "name": selected_show,
+                        "slots": slots,
+                        "data": df.to_dict("records"),
+                        "last_updated": datetime.now()
+                    }},
+                    upsert=True
+                )
+                st.success("✅ State Latched to Database")
+                st.rerun()
                 except Exception as e:
                     st.error(f"Sync Fault: {e}")
 
