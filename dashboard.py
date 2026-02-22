@@ -244,23 +244,23 @@ with tab4:
                     )
                     st.divider()
                     if not st.session_state.active_event_data.empty:
-                    # Display current 'RAM' stats
-                    st.success(f"🛰️ ACTIVE: {st.session_state.active_event_name}")
-                    
-                    c1, c2 = st.columns(2)
-                    c1.metric("Guards Loaded", len(st.session_state.active_event_data))
-                    
-                    # Count the total finalists allowed across all classes
-                    total_slots = sum(st.session_state.finals_slots.values())
-                    c2.metric("Total Finals Slots", total_slots)
+                        # Display current 'RAM' stats
+                        st.success(f"🛰️ ACTIVE: {st.session_state.active_event_name}")
+                        
+                        c1, c2 = st.columns(2)
+                        c1.metric("Guards Loaded", len(st.session_state.active_event_data))
+                        
+                        # Count the total finalists allowed across all classes
+                        total_slots = sum(st.session_state.finals_slots.values())
+                        c2.metric("Total Finals Slots", total_slots)
 
-                    if st.button("🗑️ Clear System RAM"):
-                        st.session_state.active_event_data = pd.DataFrame()
-                        st.session_state.finals_slots = {}
-                        st.session_state.active_event_name = "No Active Event"
+                        if st.button("🗑️ Clear System RAM"):
+                            st.session_state.active_event_data = pd.DataFrame()
+                            st.session_state.finals_slots = {}
+                            st.session_state.active_event_name = "No Active Event"
+                            st.rerun()
+                        st.success(f"✅ {sel_show} Latched to Live Hub")
                         st.rerun()
-                    st.success(f"✅ {sel_show} Latched to Live Hub")
-                    st.rerun()
 
                 
         
