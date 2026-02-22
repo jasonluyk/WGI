@@ -107,12 +107,15 @@ def pull_dual_event_data(prelims_url, finals_url):
     """Probes the live circuit using a virtual browser to catch dynamic scores."""
     try:
         with sync_playwright() as p:
-            # Launch headless browser (Low-power mode for cloud)
-            browser = p.chromium.launch(headless=True)
+            # We must add 'args' to bypass sandbox restrictions in the cloud
+            browser = p.chromium.launch(
+                headless=True, 
+                args=["--no-sandbox", "--disable-setuid-sandbox"]
+            )
             page = browser.new_page()
             
             # --- PROBE PRELIMS ---
-            page.goto(prelims_url, wait_until="networkidle")
+            page.goto(prelims_url, wait_until="networkidle", timeout=30000)
             content = page.content()
             soup = BeautifulSoup(content, 'html.parser')
             
@@ -153,9 +156,10 @@ def pull_dual_event_data(prelims_url, finals_url):
                             f_slots[s_class] = f_slots.get(s_class, 0) + 1
             
             browser.close()
-            return pd.DataFrame(prelims_data), f_slots
+            return df, slots
     except Exception as e:
-        print(f"Hardware Fault: {e}")
+        # LOG THE ERROR: So we can see exactly why the trace is breaking
+        st.error(f"Scraper Fault: {e}") 
         return pd.DataFrame(), {}
 
 
