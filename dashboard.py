@@ -188,7 +188,6 @@ with tab3:
 
 # --- TAB 4: ADMIN (RESTORED SYNC OPTION) ---
 with tab4:
-    with tab4:
     # Logic is now strictly Session-Based
     if not st.session_state.admin_logged_in:
         st.header("🔐 Admin Access")
