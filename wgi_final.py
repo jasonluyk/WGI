@@ -1,55 +1,28 @@
 import os
-import io
-import time
-import requests
 import subprocess
+import requests
 import pandas as pd
-from datetime import datetime
+import streamlit as st
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
-#import asyncio
-import sys
 
-# Windows compatibility fix for Playwright and Streamlit
-#if sys.platform == 'win32':
-   # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# --- 1. SYSTEM BOOT LATCH (The Post-Assembly Fix) ---
+@st.cache_resource
+def install_playwright_binaries():
+    """Ensures the browser engine is seated before the app starts."""
+    try:
+        # Check if chromium is already installed; if not, install it.
+        # This prevents the 'ModuleNotFoundError' and 'ExecutableNotFound'
+        subprocess.run(["playwright", "install", "chromium"], check=True)
+        return True
+    except Exception as e:
+        # If this fails, we want to know why on the UI
+        print(f"Boot Error: {e}")
+        return False
 
+# Trigger the install sequence immediately upon import
+install_playwright_binaries()
 
-
-# --- Configuration ---
-INDEX_URL = "https://www.wgi.org/scores/color-guard-scores/"
-RAW_DIR = "debug_html"
-CSV_DIR = "regional_csvs"
-MASTER_DIR = "analytics"
-
-# Ensure all directories exist
-for folder in [RAW_DIR, CSV_DIR, MASTER_DIR]:
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-
-def get_event_list(page):
-    """Stage 1: Now finds BOTH Prelims and Finals."""
-    print("Searching for Prelims and Finals events...")
-    page.goto(INDEX_URL)
-    page.wait_for_selector("table", timeout=15000)
-    
-    events = []
-    rows = page.query_selector_all("tr")
-    for row in rows:
-        row_text = row.inner_text().upper()
-        # Updated to include Prelims
-        if "FINALS" in row_text or "PRELIMS" in row_text:
-            link = row.query_selector("a[href*='ShowId=']")
-            if link:
-                href = link.get_attribute("href")
-                show_id = href.split("ShowId=")[1].split("&")[0]
-                # Keep the event name but label it for identification
-                event_name = row_text.split('\t')[0].replace(" ", "_").strip()
-                events.append({"id": show_id, "name": event_name})
-    
-    unique_events = {v['id']: v for v in events}.values()
-    print(f"Found {len(unique_events)} score sessions.")
-    return unique_events
 
 EVENT_LUT = {
     "Bakersfield Regional": {
@@ -89,63 +62,68 @@ EVENT_LUT = {
 }
 
 def get_manifest_events():
-    """Returns the manifest, handling both dicts and standard strings."""
+    """Standardizes the LUT for the UI dropdown."""
     events = []
     for name, path in EVENT_LUT.items():
         if isinstance(path, dict):
-            # Pass the dict directly if it contains prelims/finals links
-            full_url = path
+            url_data = path
         elif path.startswith("http"):
-            full_url = path
+            url_data = path
         else:
-            full_url = f"https://www.wgi.org/event-details-page/?eventId={path}&division=CG"
-        
-        events.append({"name": name, "url": full_url})
+            url_data = f"https://www.wgi.org/event-details-page/?eventId={path}&division=CG"
+        events.append({"name": name, "url": url_data})
     return events
 
+# --- 3. LIVE PROBE (The Playwright Scraper) ---
 def pull_dual_event_data(prelims_url, finals_url):
-    """Probes the live circuit using a virtual browser to catch dynamic scores."""
+    """
+    Uses Playwright to capture dynamic <td> data from CompetitionSuite.
+    Think of this as a 'Logic Analyzer' for the live score stream.
+    """
     try:
         with sync_playwright() as p:
-            # We must add 'args' to bypass sandbox restrictions in the cloud
+            # Cloud-optimized browser launch
             browser = p.chromium.launch(
-                headless=True, 
+                headless=True,
                 args=["--no-sandbox", "--disable-setuid-sandbox"]
             )
-            page = browser.new_page()
+            context = browser.new_context(user_agent="Mozilla/5.0")
+            page = context.new_page()
+
+            # --- CHANNEL A: PRELIMS (SCORES) ---
+            page.goto(prelims_url, wait_until="networkidle", timeout=45000)
+            soup = BeautifulSoup(page.content(), 'html.parser')
             
-            # --- PROBE PRELIMS ---
-            page.goto(prelims_url, wait_until="networkidle", timeout=30000)
-            content = page.content()
-            soup = BeautifulSoup(content, 'html.parser')
-            
-            table = soup.find('table')
             prelims_data = []
+            table = soup.find('table')
             if table:
-                for row in table.find_all('tr')[1:]: # Skip header
+                # Iterating through rows to find Guard, Class, and Score
+                for row in table.find_all('tr')[1:]:  # Skip header
                     cols = row.find_all('td')
                     if len(cols) >= 4:
                         name = cols[1].get_text(strip=True)
                         g_class = cols[2].get_text(strip=True)
-                        time = cols[0].get_text(strip=True)
-                        # The 'Logic Level' we need: The Score Cell
-                        raw_score = cols[3].get_text(strip=True)
+                        time_str = cols[0].get_text(strip=True)
+                        score_str = cols[3].get_text(strip=True)
                         
+                        # Logic level conversion (String to Float)
                         try:
-                            numeric_score = float(raw_score)
-                        except ValueError:
-                            numeric_score = 0.0
+                            score_val = float(score_str)
+                        except (ValueError, TypeError):
+                            score_val = 0.0
 
                         if name and g_class:
                             prelims_data.append({
-                                "Guard": name, "Class": g_class,
-                                "Perform Time": time, "Score": numeric_score
+                                "Guard": name,
+                                "Class": g_class,
+                                "Perform Time": time_str,
+                                "Score": score_val
                             })
 
-            # --- PROBE FINALS (Slots) ---
-            f_slots = {}
+            # --- CHANNEL B: FINALS (SLOTS) ---
+            finals_slots = {}
             if finals_url:
-                page.goto(finals_url, wait_until="networkidle")
+                page.goto(finals_url, wait_until="networkidle", timeout=45000)
                 f_soup = BeautifulSoup(page.content(), 'html.parser')
                 f_table = f_soup.find('table')
                 if f_table:
@@ -153,209 +131,36 @@ def pull_dual_event_data(prelims_url, finals_url):
                         f_cols = f_row.find_all('td')
                         if len(f_cols) >= 3:
                             s_class = f_cols[2].get_text(strip=True)
-                            f_slots[s_class] = f_slots.get(s_class, 0) + 1
-            
+                            finals_slots[s_class] = finals_slots.get(s_class, 0) + 1
+
             browser.close()
-            return df, slots
+            return pd.DataFrame(prelims_data), finals_slots
+
     except Exception as e:
-        # LOG THE ERROR: So we can see exactly why the trace is breaking
-        st.error(f"Scraper Fault: {e}") 
+        # Returning empty structures on fault to prevent UI crash
+        print(f"Scraper Logic Error: {e}")
         return pd.DataFrame(), {}
 
-
-
+# --- 4. ANALYTICS SCRAPER (Standard Requests) ---
 def get_wgi_events_by_date(target_date):
-    # This URL provides a direct, chronological list that isn't filtered like the calendar
+    """Scrapes the main WGI score list using standard requests."""
     url = "https://www.wgi.org/scores/color-guard-scores/"
     headers = {"User-Agent": "Mozilla/5.0"}
-    
     try:
         response = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(response.text, 'html.parser')
-        
         events = []
-        month_token = target_date.strftime("%b") # "Feb"
-        day_token = str(target_date.day)         # "21"
+        month_token = target_date.strftime("%b")
+        day_token = str(target_date.day)
         
-        # On the scores page, events are listed in a table (tr/td)
-        # This is a much more stable "Digital Signal" than the nested divs
-        rows = soup.find_all('tr')
-        
-        for row in rows:
+        for row in soup.find_all('tr'):
             row_text = row.get_text()
-            
-            # Logic: If 'Feb' and '21' are found in the same row
             if month_token in row_text and day_token in row_text:
                 link = row.find('a', href=True)
                 if link:
                     href = link['href']
                     full_url = href if href.startswith('http') else f"https://www.wgi.org{href}"
-                    
-                    events.append({
-                        "name": link.get_text(strip=True),
-                        "url": full_url
-                    })
-        
-        # Clean up duplicates
+                    events.append({"name": link.get_text(strip=True), "url": full_url})
         return list({v['url']:v for v in events}.values())
-    except Exception as e:
-        print(f"Scraper Error: {e}")
+    except Exception:
         return []
-
-def pull_full_event_data(event_url):
-    headers = {"User-Agent": "Mozilla/5.0"}
-    try:
-        response = requests.get(event_url, headers=headers, timeout=15)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Pull ALL rows from the 'schedule-area'
-        all_rows = soup.find_all('div', class_='schedule-row')
-        
-        prelims_data = []
-        finals_slots_by_class = {}
-        current_mode = "PRELIMS" # Start state
-        
-        for row in all_rows:
-            # BROADENED SYNC LOGIC: Catch any mention of Finals
-            row_text = row.get_text().upper().strip()
-            
-            # If the row itself is a header (no initials/time), it's likely a mode switch
-            if "FINALS" in row_text and "PRELIMS" not in row_text:
-                current_mode = "FINALS"
-                continue
-            
-            # Skip 'Break' or 'Lunch' rows
-            if 'schedule-row--custom' in row.get('class', []):
-                continue
-
-            # 2. DATA EXTRACTION
-            try:
-                name_div = row.find('div', class_='schedule-row__name')
-                class_div = row.find('div', class_='schedule-row__initials')
-                time_div = row.find('div', class_='schedule-row__time')
-                
-                # If we have a class and time, it's a valid slot
-                if class_div and time_div:
-                    guard_class = class_div.get_text(strip=True)
-                    
-                    if current_mode == "PRELIMS" and name_div:
-                        # PRELIMS: We need the guard name for the roster
-                        name = name_div.get_text(strip=True)
-                        prelims_data.append({
-                            "Guard": name, 
-                            "Class": guard_class, 
-                            "Perform Time": time_div.get_text(strip=True), 
-                            "Score": 0.0
-                        })
-                    
-                    elif current_mode == "FINALS":
-                        # FINALS: We just increment the slot count for that class
-                        finals_slots_by_class[guard_class] = finals_slots_by_class.get(guard_class, 0) + 1
-            except AttributeError:
-                continue
-        
-        return pd.DataFrame(prelims_data), finals_slots_by_class
-    except Exception as e:
-        print(f"Full Scraper Fault: {e}")
-        return pd.DataFrame(), {}
-
-        
-def download_event_html(page, event):
-    """Stage 2: Only downloads if the file doesn't exist."""
-    file_path = os.path.join(RAW_DIR, f"{event['name']}_RAW.html")
-    
-    # Smart Update Check
-    if os.path.exists(file_path):
-        print(f"  Skipping {event['name']} (Already downloaded).")
-        return True
-
-    score_url = f"https://www.wgi.org/scores/color-guard-score-event/?ShowId={event['id']}"
-    print(f"Downloading HTML for: {event['name']}...")
-    try:
-        page.goto(score_url)
-        page.wait_for_selector("table", timeout=10000)
-        page.wait_for_timeout(2000) 
-        soup = BeautifulSoup(page.content(), 'html.parser')
-        tables = soup.find_all('table')
-        with open(file_path, "w", encoding="utf-8") as f:
-            for table in tables:
-                f.write(f"\n{table.prettify()}\n\n")
-        return True
-    except Exception as e:
-        print(f"  Error downloading {event['name']}: {e}")
-        return False
-
-def parse_and_rank():
-    """Stage 3: Logic to keep only the 'Weekend High' for each guard per event."""
-    print("\nStarting data parsing with 'Weekend High' logic...")
-    all_regional_data = []
-    html_files = [f for f in os.listdir(RAW_DIR) if f.endswith('.html')]
-
-    for filename in html_files:
-        # We extract the base event name (e.g., 'Clayton' instead of 'Clayton_FINALS')
-        # This helps us group Prelims and Finals from the same location together
-        base_event = filename.split('_')[0] 
-        file_path = os.path.join(RAW_DIR, filename)
-        
-        with open(file_path, 'r', encoding='utf-8') as f:
-            soup = BeautifulSoup(f.read(), 'html.parser')
-        
-        tables = soup.find_all('table')
-        for table in tables:
-            current_class = "Unknown Class"
-            for row in table.find_all('tr'):
-                div_header = row.find('th', class_='division-name')
-                if div_header:
-                    current_class = div_header.get_text(strip=True)
-                    continue 
-
-                cells = row.find_all('td')
-                if len(cells) >= 3:
-                    try:
-                        team_name = cells[1].get_text(strip=True)
-                        score_text = cells[2].get_text(strip=True).upper().replace("VIEW RECAP", "").strip()
-                        
-                        if team_name and score_text:
-                            all_regional_data.append({
-                                'Class': current_class,
-                                'Guard': team_name,
-                                'Score': float(score_text),
-                                'Event_Group': base_event # Grouping ID
-                            })
-                    except: continue
-
-    if all_regional_data:
-        raw_df = pd.DataFrame(all_regional_data)
-        
-        # KEY STEP: For every guard at a specific event group (like Clayton),
-        # only keep their highest score from that weekend.
-        weekend_highs = raw_df.groupby(['Class', 'Guard', 'Event_Group'])['Score'].max().reset_index()
-
-        # Now calculate national stats based on those Weekend Highs
-        rankings = weekend_highs.groupby(['Class', 'Guard']).agg(
-            Average_Score=('Score', 'mean'),
-            Season_High=('Score', 'max'),
-            Events_Count=('Event_Group', 'count')
-        ).reset_index()
-
-        rankings = rankings.sort_values(by=['Class', 'Average_Score'], ascending=[True, False]).round(2)
-        rankings.to_csv(os.path.join(MASTER_DIR, "NATIONAL_PROJECTED_RANKINGS.csv"), index=False)
-        print("Success! Master rankings updated using Weekend High logic.")
-
-def main():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        
-        events = get_event_list(page)
-        
-        for event in events:
-            download_event_html(page, event)
-            time.sleep(1) # Polite delay
-            
-        browser.close()
-    
-    parse_and_rank()
-
-if __name__ == "__main__":
-    main()
