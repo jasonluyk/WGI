@@ -317,9 +317,9 @@ with tab4:
             st.rerun()
 
 
-        if 'found_events' in st.session_state:
-            show_names = [e['name'] for e in st.session_state.found_events]
-            selected_show = st.selectbox("Select Competition:", show_names)
+        if 'found_events' not in st.session_state:
+        with st.spinner("Initializing Manifest..."):
+            st.session_state.found_events = get_manifest_events()
             
             if st.button("🚀 Sync Full Show Map"):
                 try:
