@@ -242,11 +242,8 @@ with tab4:
                         }}, 
                         upsert=True
                     )
-                    st.success(f"✅ {sel_show} Latched to Live Hub")
-                    st.rerun()
-
-                st.divider()
-                if not st.session_state.active_event_data.empty:
+                    st.divider()
+                    if not st.session_state.active_event_data.empty:
                     # Display current 'RAM' stats
                     st.success(f"🛰️ ACTIVE: {st.session_state.active_event_name}")
                     
@@ -262,3 +259,8 @@ with tab4:
                         st.session_state.finals_slots = {}
                         st.session_state.active_event_name = "No Active Event"
                         st.rerun()
+                    st.success(f"✅ {sel_show} Latched to Live Hub")
+                    st.rerun()
+
+                
+        
