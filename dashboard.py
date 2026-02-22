@@ -22,17 +22,22 @@ if "admin_logged_in" not in st.session_state:
     latch = db["system_state"].find_one({"type": "admin_session"})
     st.session_state.admin_logged_in = True if latch else False
 
+# --- 1. SYSTEM INITIALIZATION: Cold Boot Logic ---
 if "active_event_data" not in st.session_state:
+    # Probe MongoDB for a 'latched' session from the Admin tab
     saved = db["live_state"].find_one({"type": "current_session"})
+    
     if saved:
+        # Warm Boot: Restore the competition you previously synced
         st.session_state.active_event_data = pd.DataFrame(saved['data'])
         st.session_state.finals_slots = saved['slots']
         st.session_state.active_event_name = saved['name']
         st.session_state.active_urls = saved.get('urls', {})
     else:
+        # Cold Boot: System stays idle until Admin syncs a show
         st.session_state.active_event_data = pd.DataFrame()
         st.session_state.finals_slots = {}
-        st.session_state.active_event_name = "No Active Event"
+        st.session_state.active_event_name = None
 
 # --- 4. National Data Loader ---
 @st.cache_data(ttl=300)
@@ -153,6 +158,13 @@ with tab2:
 
 # --- TAB 3: LIVE HUB (RESTORED FINALS LOGIC) ---
 with tab3:
+    if st.session_state.active_event_data.empty:
+        # System is in 'Standby' mode
+        st.info("⚪ System Idle: No competition currently latched. Use the Admin tab to sync a show.")
+    else:
+        # System is 'Live'
+        st.header(f"📊 Live Signal: {st.session_state.active_event_name}")
+        # ... (rest of your ranking and table logic)
     if not st.session_state.active_event_data.empty:
         # Auto-Refresh Sensor
         if st.sidebar.checkbox("🔄 Auto-Poll Bakersfield (60s)"):
@@ -200,18 +212,35 @@ with tab4:
         sel_show = st.selectbox("Select Competition to Sync:", event_list)
         
         if st.button("🚀 Sync Full Show Map"):
-            target = next(e for e in st.session_state.found_events if e['name'] == sel_show)
-            p_url = target['url']['prelims'] if isinstance(target['url'], dict) else target['url']
-            f_url = target['url']['finals'] if isinstance(target['url'], dict) else ""
+    # 1. Probe the selected event from the manifest
+    target = next(e for e in st.session_state.found_events if e['name'] == sel_show)
+    
+    with st.spinner(f"Latched to {sel_show}. Probing Live Circuit..."):
+        # 2. Extract URLs (Handling both Dict and String paths)
+        p_url = target['url']['prelims'] if isinstance(target['url'], dict) else target['url']
+        f_url = target['url']['finals'] if isinstance(target['url'], dict) else ""
+        
+        # 3. Execute Scrape (Playwright)
+        df_live, f_slots = pull_dual_event_data(p_url, f_url)
+        
+        if not df_live.empty:
+            # 4. Update RAM (Session State)
+            st.session_state.active_event_data = df_live
+            st.session_state.finals_slots = f_s
+            st.session_state.active_event_name = sel_show
+            st.session_state.active_urls = {"prelims": p_url, "finals": f_url}
             
-            with st.spinner(f"Probing {sel_show}..."):
-                df_l, f_s = pull_dual_event_data(p_url, f_url)
-                if not df_l.empty:
-                    st.session_state.active_event_data = df_l
-                    st.session_state.finals_slots = f_s
-                    st.session_state.active_event_name = sel_show
-                    st.session_state.active_urls = {"prelims": p_url, "finals": f_url}
-                    db["live_state"].update_one({"type": "current_session"}, {"$set": {
-                        "name": sel_show, "slots": f_s, "data": df_l.to_dict("records"), "urls": st.session_state.active_urls
-                    }}, upsert=True)
-                    st.success("✅ Bakersfield Logic Synchronized"); st.rerun()
+            # 5. Update EEPROM (MongoDB Persistence)
+            db["live_state"].update_one(
+                {"type": "current_session"}, 
+                {"$set": {
+                    "name": sel_show, 
+                    "slots": f_s, 
+                    "data": df_live.to_dict("records"),
+                    "urls": st.session_state.active_urls,
+                    "last_updated": datetime.now()
+                }}, 
+                upsert=True
+            )
+            st.success(f"✅ {sel_show} Latched to Live Hub")
+            st.rerun()
