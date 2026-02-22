@@ -128,7 +128,7 @@ with tab2:
             
             st.write(f"### Overall Standing: Top {100 - int(percentile)}%")
             st.progress(
-                max(0.0, min(1.0, percentile / 100)), 
+                max(100.0, min(1.0, percentile / 100)), 
                 text=f"{sel_guard} is #{current_rank} out of {total_guards} teams nationally"
             )
 
