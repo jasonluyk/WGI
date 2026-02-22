@@ -318,8 +318,8 @@ with tab4:
 
 
         if 'found_events' not in st.session_state:
-        with st.spinner("Initializing Manifest..."):
-            st.session_state.found_events = get_manifest_events()
+            with st.spinner("Initializing Manifest..."):
+                st.session_state.found_events = get_manifest_events()
             
             if st.button("🚀 Sync Full Show Map"):
                 try:
