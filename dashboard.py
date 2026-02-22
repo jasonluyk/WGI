@@ -118,39 +118,36 @@ with tab2:
             g1.metric("Gap to 1st", f"{gap_to_first:.2f}", delta=f"{gap_to_first:.2f}")
             g2.metric("Gap to 15th", f"{gap_to_fifteenth:.2f}", delta=f"{gap_to_fifteenth:.2f}")
 
-           # --- SECTION 3: National Standing (Split Logic) ---
+           # --- SECTION 3: National Standing (Calibrated Percentile) ---
             st.divider()
             total_guards = len(comp_df)
             current_rank = int(guard_data['Rank'])
             
-            # 1. Calculate the base ratio (0.0 to 1.0)
-            # Example: 21 / 29 = 0.724 (meaning you are 72% down the list)
-            rank_ratio = float(current_rank) / float(total_guards)
+            # 1. Calculate the 'Bottom' percentage
+            # Logic: (Total - Rank) / Total
+            # Example: (29 - 21) / 29 = 0.275 -> 28%
+            bottom_ratio = (float(total_guards) - float(current_rank)) / float(total_guards)
+            bottom_percent = int(bottom_ratio * 100)
             
-            # 2. Split Logic: Determine if Guard is Top-Half or Bottom-Half
-            if rank_ratio <= 0.5:
-                # Top Half: Show as "Top X%"
-                # Example: Rank 5/29 = 0.17 -> Top 17%
-                display_percent = int(rank_ratio * 100)
-                if display_percent == 0: display_percent = 1 # UX fix for Rank #1
-                label_text = f"🏆 Overall Standing: Top {display_percent}%"
-                bar_color = "normal" 
+            # 2. Split Logic: Toggle terminology at the 50% threshold
+            if current_rank <= (total_guards / 2):
+                # Top Half: Show how many teams are below you as a 'Top' percentile
+                # Example: Rank 5/29 -> Top 17%
+                top_percent = int((float(current_rank) / float(total_guards)) * 100)
+                if top_percent == 0: top_percent = 1
+                label_text = f"🏆 Overall Standing: Top {top_percent}%"
             else:
-                # Bottom Half: Show as "Bottom X%"
-                # Example: Rank 21/29 -> (1.0 - 0.72) * 100 = 28% from the bottom
-                # We show the percentage of teams remaining 'below' them
-                display_percent = int((1.0 - rank_ratio) * 100)
-                label_text = f"📊 Overall Standing: Bottom {100 - display_percent}%"
+                # Bottom Half: Show the percentage of the field remaining below you
+                # Example: Rank 21/29 -> Bottom 28%
+                label_text = f"📊 Overall Standing: Bottom {bottom_percent}%"
 
             st.write(f"### {label_text}")
             
-            # 3. Progress Bar Fill (The 'Charge' Level)
-            # We want the bar to be 'fuller' for better ranks (inverse of rank_ratio)
-            # Example: Rank 21/29 shows a bar that is 28% full.
-            bar_fill = (float(total_guards) - float(current_rank) + 1.0) / float(total_guards)
-            
+            # 3. Progress Bar (Visualizing the 'Power Level')
+            # The bar fills from left to right; higher rank = fuller bar.
+            # A Rank 21/29 will show a bar that is ~28% full.
             st.progress(
-                max(0.0, min(1.0, bar_fill)), 
+                max(0.0, min(1.0, bottom_ratio)), 
                 text=f"{sel_guard} is #{current_rank} out of {total_guards} teams"
             )
 
