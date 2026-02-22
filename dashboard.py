@@ -21,6 +21,10 @@ from datetime import datetime
 # Import your helper functions
 from wgi_final import get_manifest_events, get_wgi_events_by_date, pull_full_event_data, pull_dual_event_data
 
+import os
+os.system("playwright install chromium")
+
+
 if "active_event_data" not in st.session_state:
     st.session_state.active_event_data = pd.DataFrame()
 if "active_event_name" not in st.session_state:
@@ -58,20 +62,15 @@ client = init_connection()
 db = client["rankings_2026"]
 collection = db["wgi_analytics"]
 
-# --- PERSISTENCE LATCH: Restore State from DB ---
-if "active_event_data" not in st.session_state:
-    # Look for the last saved 'Live State' in the database
-    saved_state = db["live_state"].find_one({"type": "current_session"})
-    
-    if saved_state:
-        st.session_state.active_event_data = pd.DataFrame(saved_state['data'])
-        st.session_state.finals_slots = saved_state['slots']
-        st.session_state.active_event_name = saved_state['name']
-    else:
-        st.session_state.active_event_data = pd.DataFrame()
-        st.session_state.finals_slots = {}
-        st.session_state.active_event_name = "No Active Event"
+# --- 1. INITIALIZATION: Probe for Persistent Latch ---
+if "admin_logged_in" not in st.session_state:
+    # Check MongoDB for an active admin session latch
+    latch = db["system_state"].find_one({"type": "admin_session"})
+    st.session_state.admin_logged_in = True if latch else False
 
+# Auto-load the manifest so buttons don't disappear
+if st.session_state.admin_logged_in and 'found_events' not in st.session_state:
+    st.session_state.found_events = get_manifest_events()
 
 # --- 3. Functional Logic ---
 
@@ -294,22 +293,29 @@ with tab3:
 
 # --- TAB 4: ADMIN ---
 with tab4:
-    # Check if we are already authenticated
-    if not st.session_state.get('admin_logged_in', False):
+    if not st.session_state.admin_logged_in:
         st.header("🔐 Admin Access")
-        admin_pwd = st.text_input("Enter System Password", type="password")
+        admin_pwd = st.text_input("Admin Password", type="password")
         if st.button("Authorize"):
             if admin_pwd == st.secrets["ADMIN_PASS"]:
+                # Burn the latch into MongoDB so it survives refresh
+                db["system_state"].update_one(
+                    {"type": "admin_session"},
+                    {"$set": {"active": True, "timestamp": datetime.now()}},
+                    upsert=True
+                )
                 st.session_state.admin_logged_in = True
-                st.rerun() # Re-draw the UI in 'Authenticated' mode
-            else:
-                st.error("Invalid Credentials")
+                st.rerun()
     else:
-        # --- AUTHENTICATED AREA ---
-        st.success("🛰️ System Link Established")
-        if st.button("Logout"):
+        # --- SECURE AREA: Buttons stay visible here ---
+        st.success("🛰️ System Link Established (Persistent)")
+        
+        # Logout logic to clear the latch
+        if st.button("🛑 Logout / Clear Latch"):
+            db["system_state"].delete_one({"type": "admin_session"})
             st.session_state.admin_logged_in = False
             st.rerun()
+
 
         if 'found_events' in st.session_state:
             show_names = [e['name'] for e in st.session_state.found_events]

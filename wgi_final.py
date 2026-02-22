@@ -6,7 +6,7 @@ import subprocess
 import pandas as pd
 from datetime import datetime
 from bs4 import BeautifulSoup
-#from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright
 #import asyncio
 import sys
 
@@ -104,45 +104,59 @@ def get_manifest_events():
     return events
 
 def pull_dual_event_data(prelims_url, finals_url):
-    """Probes Port A (Prelims) and Port B (Finals) to map the day."""
-    headers = {"User-Agent": "Mozilla/5.0"}
+    """Probes the live circuit using a virtual browser to catch dynamic scores."""
     try:
-        # 1. Probing Prelims
-        p_resp = requests.get(prelims_url, headers=headers, timeout=10)
-        p_soup = BeautifulSoup(p_resp.text, 'html.parser')
-        p_rows = p_soup.find_all('div', class_='schedule-row')
-        
-        prelims_data = []
-        for row in p_rows:
-            if 'schedule-row--custom' in row.get('class', []): continue
-            name = row.find('div', class_='schedule-row__name')
-            initials = row.find('div', class_='schedule-row__initials')
-            time = row.find('div', class_='schedule-row__time')
-            if name and initials:
-                prelims_data.append({
-                    "Guard": name.get_text(strip=True),
-                    "Class": initials.get_text(strip=True),
-                    "Perform Time": time.get_text(strip=True),
-                    "Score": 0.0
-                })
-        
-        # 2. Probing Finals Slots
-        f_resp = requests.get(finals_url, headers=headers, timeout=10)
-        f_soup = BeautifulSoup(f_resp.text, 'html.parser')
-        f_rows = f_soup.find_all('div', class_='schedule-row')
-        
-        finals_slots = {}
-        for row in f_rows:
-            if 'schedule-row--custom' in row.get('class', []): continue
-            initials = row.find('div', class_='schedule-row__initials')
-            if initials:
-                g_class = initials.get_text(strip=True)
-                finals_slots[g_class] = finals_slots.get(g_class, 0) + 1
-                
-        return pd.DataFrame(prelims_data), finals_slots
-    except Exception as e:
-        return pd.DataFrame(), {}
+        with sync_playwright() as p:
+            # Launch headless browser (Low-power mode for cloud)
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            
+            # --- PROBE PRELIMS ---
+            page.goto(prelims_url, wait_until="networkidle")
+            content = page.content()
+            soup = BeautifulSoup(content, 'html.parser')
+            
+            table = soup.find('table')
+            prelims_data = []
+            if table:
+                for row in table.find_all('tr')[1:]: # Skip header
+                    cols = row.find_all('td')
+                    if len(cols) >= 4:
+                        name = cols[1].get_text(strip=True)
+                        g_class = cols[2].get_text(strip=True)
+                        time = cols[0].get_text(strip=True)
+                        # The 'Logic Level' we need: The Score Cell
+                        raw_score = cols[3].get_text(strip=True)
+                        
+                        try:
+                            numeric_score = float(raw_score)
+                        except ValueError:
+                            numeric_score = 0.0
 
+                        if name and g_class:
+                            prelims_data.append({
+                                "Guard": name, "Class": g_class,
+                                "Perform Time": time, "Score": numeric_score
+                            })
+
+            # --- PROBE FINALS (Slots) ---
+            f_slots = {}
+            if finals_url:
+                page.goto(finals_url, wait_until="networkidle")
+                f_soup = BeautifulSoup(page.content(), 'html.parser')
+                f_table = f_soup.find('table')
+                if f_table:
+                    for f_row in f_table.find_all('tr'):
+                        f_cols = f_row.find_all('td')
+                        if len(f_cols) >= 3:
+                            s_class = f_cols[2].get_text(strip=True)
+                            f_slots[s_class] = f_slots.get(s_class, 0) + 1
+            
+            browser.close()
+            return pd.DataFrame(prelims_data), f_slots
+    except Exception as e:
+        print(f"Hardware Fault: {e}")
+        return pd.DataFrame(), {}
 
 
 
