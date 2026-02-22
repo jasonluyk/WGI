@@ -212,35 +212,35 @@ with tab4:
         sel_show = st.selectbox("Select Competition to Sync:", event_list)
         
         if st.button("🚀 Sync Full Show Map"):
-    # 1. Probe the selected event from the manifest
-    target = next(e for e in st.session_state.found_events if e['name'] == sel_show)
-    
-    with st.spinner(f"Latched to {sel_show}. Probing Live Circuit..."):
-        # 2. Extract URLs (Handling both Dict and String paths)
-        p_url = target['url']['prelims'] if isinstance(target['url'], dict) else target['url']
-        f_url = target['url']['finals'] if isinstance(target['url'], dict) else ""
-        
-        # 3. Execute Scrape (Playwright)
-        df_live, f_slots = pull_dual_event_data(p_url, f_url)
-        
-        if not df_live.empty:
-            # 4. Update RAM (Session State)
-            st.session_state.active_event_data = df_live
-            st.session_state.finals_slots = f_s
-            st.session_state.active_event_name = sel_show
-            st.session_state.active_urls = {"prelims": p_url, "finals": f_url}
+            # 1. Probe the selected event from the manifest
+            target = next(e for e in st.session_state.found_events if e['name'] == sel_show)
             
-            # 5. Update EEPROM (MongoDB Persistence)
-            db["live_state"].update_one(
-                {"type": "current_session"}, 
-                {"$set": {
-                    "name": sel_show, 
-                    "slots": f_s, 
-                    "data": df_live.to_dict("records"),
-                    "urls": st.session_state.active_urls,
-                    "last_updated": datetime.now()
-                }}, 
-                upsert=True
-            )
-            st.success(f"✅ {sel_show} Latched to Live Hub")
-            st.rerun()
+            with st.spinner(f"Latched to {sel_show}. Probing Live Circuit..."):
+                # 2. Extract URLs (Handling both Dict and String paths)
+                p_url = target['url']['prelims'] if isinstance(target['url'], dict) else target['url']
+                f_url = target['url']['finals'] if isinstance(target['url'], dict) else ""
+                
+                # 3. Execute Scrape (Playwright)
+                df_live, f_slots = pull_dual_event_data(p_url, f_url)
+                
+                if not df_live.empty:
+                    # 4. Update RAM (Session State)
+                    st.session_state.active_event_data = df_live
+                    st.session_state.finals_slots = f_s
+                    st.session_state.active_event_name = sel_show
+                    st.session_state.active_urls = {"prelims": p_url, "finals": f_url}
+                    
+                    # 5. Update EEPROM (MongoDB Persistence)
+                    db["live_state"].update_one(
+                        {"type": "current_session"}, 
+                        {"$set": {
+                            "name": sel_show, 
+                            "slots": f_s, 
+                            "data": df_live.to_dict("records"),
+                            "urls": st.session_state.active_urls,
+                            "last_updated": datetime.now()
+                        }}, 
+                        upsert=True
+                    )
+                    st.success(f"✅ {sel_show} Latched to Live Hub")
+                    st.rerun()
