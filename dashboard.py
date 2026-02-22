@@ -61,37 +61,76 @@ with tab1:
 
 # --- TAB 2: BSI Comparison (RESTORED) ---
 with tab2:
-    if df.empty: st.info("Sync data in Admin.")
+    if df.empty:
+        st.info("Sync national data in the Admin tab to enable BSI comparisons.")
     else:
+        # 1. Selection Header: Choosing the Signal Path
         c1, c2 = st.columns(2)
-        with c1: s_class = st.selectbox("1. Select Division", sorted(df['Class'].unique()), key="bsi_c")
-        comp_df = df[df['Class'] == s_class].copy().sort_values(by='Average_Score', ascending=False)
-        comp_df['Rank'] = range(1, len(comp_df) + 1)
-        with c2: s_guard = st.selectbox("2. Select Guard", sorted(comp_df['Guard'].unique()), key="bsi_g")
+        with c1:
+            sel_class = st.selectbox("1. Select Division", sorted(df['Class'].unique()), key="comp_class")
         
-        if s_guard:
-            g_data = comp_df[comp_df['Guard'] == s_guard].iloc[0]
-            st.subheader(f"Standing: {s_guard}")
+        # Filter and Sort to establish fresh Ranks based on the current National Bus
+        comp_df = df[df['Class'] == sel_class].copy()
+        comp_df = comp_df.sort_values(by='Average_Score', ascending=False)
+        comp_df['Rank'] = range(1, len(comp_df) + 1)
+        
+        with c2:
+            sel_guard = st.selectbox("2. Select Guard", sorted(comp_df['Guard'].unique()), key="comp_guard")
+
+        if sel_guard:
+            guard_data = comp_df[comp_df['Guard'] == sel_guard].iloc[0]
+            
+            # --- SECTION 1: Current Standing ---
+            st.subheader(f"Current Standing: {sel_guard}")
             m1, m2, m3 = st.columns(3)
-            m1.metric("National Rank", f"#{int(g_data['Rank'])}")
-            m2.metric("Avg Score", f"{float(g_data['Average_Score']):.2f}")
-            m3.metric("Season High", f"{float(g_data['Season_High']):.2f}")
+            m1.metric("National Rank", f"#{int(guard_data['Rank'])}")
+            m2.metric("Average Score", f"{float(guard_data['Average_Score']):.2f}")
+            m3.metric("Season High", f"{float(guard_data['Season_High']):.2f}")
             
-            # Gaps and Benchmarks
             st.divider()
-            first_score = float(comp_df.iloc[0]['Average_Score'])
-            fifteenth_score = float(comp_df.iloc[14]['Average_Score']) if len(comp_df) >= 15 else float(comp_df.iloc[-1]['Average_Score'])
+
+            # --- SECTION 2: Class Benchmarks (The 'Goal' Voltage) ---
+            st.subheader(f"{sel_class} Benchmarks")
             
+            # Identify Benchmark Scores (1st and 15th Place)
+            first_place_score = float(comp_df.iloc[0]['Average_Score'])
+            
+            # Handle classes with fewer than 15 guards
+            if len(comp_df) >= 15:
+                fifteenth_place_score = float(comp_df.iloc[14]['Average_Score'])
+                bubble_label = "15th Place (Finalist Bubble)"
+            else:
+                fifteenth_place_score = float(comp_df.iloc[-1]['Average_Score'])
+                bubble_label = "Last Place (Current Class Size)"
+
+            # Calculate Point Gaps
+            my_avg = float(guard_data['Average_Score'])
+            gap_to_first = my_avg - first_place_score
+            gap_to_fifteenth = my_avg - fifteenth_place_score
+
+            # Display Benchmark Metrics with Gaps
             b1, b2 = st.columns(2)
-            b1.metric("Gap to #1", f"{float(g_data['Average_Score']) - first_score:.2f}")
-            b2.metric("Gap to 15th", f"{float(g_data['Average_Score']) - fifteenth_score:.2f}")
+            b1.metric("1st Place Score", f"{first_place_score:.2f}")
+            b2.metric(bubble_label, f"{fifteenth_place_score:.2f}")
+
+            g1, g2 = st.columns(2)
+            # 'Delta' shows how far up/down you are from the target
+            g1.metric("Gap to 1st", f"{gap_to_first:.2f}", delta=f"{gap_to_first:.2f}")
+            g2.metric("Gap to 15th", f"{gap_to_fifteenth:.2f}", delta=f"{gap_to_fifteenth:.2f}")
+
+            # --- SECTION 3: National Standing (Percentile Bar) ---
+            st.divider()
+            total_guards = len(comp_df)
+            current_rank = int(guard_data['Rank'])
             
-            # Percentile Progress
-            total = len(comp_df)
-            rank = int(g_data['Rank'])
-            percentile = ((total - rank + 1) / total) * 100
-            st.write(f"### National Standing: Top {100 - int(percentile)}%")
-            st.progress(percentile / 100)
+            # Calculate percentile rank: (Total - Rank + 1) / Total
+            percentile = ((total_guards - current_rank + 1) / total_guards) * 100
+            
+            st.write(f"### Overall Standing: Top {100 - int(percentile)}%")
+            st.progress(
+                max(0.0, min(1.0, percentile / 100)), 
+                text=f"{sel_guard} is #{current_rank} out of {total_guards} teams nationally"
+            )
 
 # --- TAB 3: LIVE HUB (RESTORED FINALS LOGIC) ---
 with tab3:
