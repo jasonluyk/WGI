@@ -22,17 +22,18 @@ if "admin_logged_in" not in st.session_state:
     latch = db["system_state"].find_one({"type": "admin_session"})
     st.session_state.admin_logged_in = True if latch else False
 
-# --- 1. SYSTEM INITIALIZATION: Volatile Boot ---
-# We are NOT checking MongoDB here. This ensures a push to GitHub 
-# results in a 'Cold Boot' with no data and no active login.
-
+# --- 1. SYSTEM INITIALIZATION: Stable Boot ---
+# Initialize session variables as empty containers to prevent UI crashes
 if "active_event_data" not in st.session_state:
     st.session_state.active_event_data = pd.DataFrame()
+if "finals_slots" not in st.session_state:
     st.session_state.finals_slots = {}
-    st.session_state.active_event_name = None
+if "active_event_name" not in st.session_state:
+    st.session_state.active_event_name = "No Active Event"
 
-if "admin_logged_in" not in st.session_state:
-    st.session_state.admin_logged_in = False
+# Ensure manifest is always loaded so the Admin dropdown doesn't disappear
+if 'found_events' not in st.session_state:
+    st.session_state.found_events = get_manifest_events()
 
 # --- 4. National Data Loader ---
 @st.cache_data(ttl=300)
@@ -243,3 +244,21 @@ with tab4:
                     )
                     st.success(f"✅ {sel_show} Latched to Live Hub")
                     st.rerun()
+
+                st.divider()
+                if not st.session_state.active_event_data.empty:
+                    # Display current 'RAM' stats
+                    st.success(f"🛰️ ACTIVE: {st.session_state.active_event_name}")
+                    
+                    c1, c2 = st.columns(2)
+                    c1.metric("Guards Loaded", len(st.session_state.active_event_data))
+                    
+                    # Count the total finalists allowed across all classes
+                    total_slots = sum(st.session_state.finals_slots.values())
+                    c2.metric("Total Finals Slots", total_slots)
+
+                    if st.button("🗑️ Clear System RAM"):
+                        st.session_state.active_event_data = pd.DataFrame()
+                        st.session_state.finals_slots = {}
+                        st.session_state.active_event_name = "No Active Event"
+                        st.rerun()
