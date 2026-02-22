@@ -187,80 +187,70 @@ with tab3:
         st.dataframe(l_df, width='stretch', hide_index=True)
     else: st.info("Sync show in Admin tab.")
 
-# --- TAB 4: ADMIN (RESTORED SYNC OPTION) ---
+# --- TAB 4: ADMIN (Restored Routing) ---
 with tab4:
-    # Logic is now strictly Session-Based
     if not st.session_state.admin_logged_in:
         st.header("🔐 Admin Access")
         admin_pwd = st.text_input("Enter Password", type="password")
         if st.button("Authorize"):
             if admin_pwd == st.secrets["ADMIN_PASS"]:
                 st.session_state.admin_logged_in = True
-                # REMOVED: db["system_state"].update_one(...)
                 st.rerun()
     else:
-        st.success("🛰️ System Link Established (Current Session Only)")
+        st.success("🛰️ System Link Established")
         if st.button("Logout"):
             st.session_state.admin_logged_in = False
             st.rerun()
-        
-        # MANIFEST FIX: Ensure manifest is ALWAYS loaded for the dropdown
-        if 'found_events' not in st.session_state:
+
+        st.divider()
+        st.subheader("📡 Live Event Control")
+
+        # 1. Ensure manifest is loaded into memory
+        if 'found_events' not in st.session_state or not st.session_state.found_events:
             st.session_state.found_events = get_manifest_events()
-        
-        event_list = [e['name'] for e in st.session_state.found_events]
-        sel_show = st.selectbox("Select Competition to Sync:", event_list)
+
+        # 2. Dropdown and Sync Button
+        event_names = [e['name'] for e in st.session_state.found_events]
+        selected_show = st.selectbox("Select Competition to Sync:", event_names)
         
         if st.button("🚀 Sync Full Show Map"):
-            # 1. Probe the selected event from the manifest
-            target = next(e for e in st.session_state.found_events if e['name'] == sel_show)
-            
-            with st.spinner(f"Latched to {sel_show}. Probing Live Circuit..."):
-                # 2. Extract URLs (Handling both Dict and String paths)
-                p_url = target['url']['prelims'] if isinstance(target['url'], dict) else target['url']
-                f_url = target['url']['finals'] if isinstance(target['url'], dict) else ""
+            try:
+                # Find the target URL from our LUT
+                target = next(e for e in st.session_state.found_events if e['name'] == selected_show)
                 
-                # 3. Execute Scrape (Playwright)
-                df_live, f_slots = pull_dual_event_data(p_url, f_url)
-                
-                if not df_live.empty:
-                    # 4. Update RAM (Session State)
-                    st.session_state.active_event_data = df_live
-                    st.session_state.finals_slots = f_s
-                    st.session_state.active_event_name = sel_show
-                    st.session_state.active_urls = {"prelims": p_url, "finals": f_url}
+                with st.spinner(f"Probing {selected_show}..."):
+                    # Extract URLs (Handle dict for Bakersfield or string for WGI)
+                    p_url = target['url']['prelims'] if isinstance(target['url'], dict) else target['url']
+                    f_url = target['url']['finals'] if isinstance(target['url'], dict) else ""
                     
-                    # 5. Update EEPROM (MongoDB Persistence)
-                    db["live_state"].update_one(
-                        {"type": "current_session"}, 
-                        {"$set": {
-                            "name": sel_show, 
-                            "slots": f_s, 
-                            "data": df_live.to_dict("records"),
-                            "urls": st.session_state.active_urls,
-                            "last_updated": datetime.now()
-                        }}, 
-                        upsert=True
-                    )
-                    st.divider()
-                    if not st.session_state.active_event_data.empty:
-                        # Display current 'RAM' stats
-                        st.success(f"🛰️ ACTIVE: {st.session_state.active_event_name}")
-                        
-                        c1, c2 = st.columns(2)
-                        c1.metric("Guards Loaded", len(st.session_state.active_event_data))
-                        
-                        # Count the total finalists allowed across all classes
-                        total_slots = sum(st.session_state.finals_slots.values())
-                        c2.metric("Total Finals Slots", total_slots)
-
-                        if st.button("🗑️ Clear System RAM"):
-                            st.session_state.active_event_data = pd.DataFrame()
-                            st.session_state.finals_slots = {}
-                            st.session_state.active_event_name = "No Active Event"
-                            st.rerun()
-                        st.success(f"✅ {sel_show} Latched to Live Hub")
+                    # Execute the Playwright Scraper
+                    df_live, f_slots = pull_dual_event_data(p_url, f_url)
+                    
+                    if not df_live.empty:
+                        st.session_state.active_event_data = df_live
+                        st.session_state.finals_slots = f_slots
+                        st.session_state.active_event_name = selected_show
+                        st.success(f"✅ {selected_show} Latched to RAM")
                         st.rerun()
+                    else:
+                        st.error("Signal Lost: No data returned from scraper.")
+            except Exception as e:
+                st.error(f"Sync Fault: {e}")
 
-                
-        
+        # 3. SYSTEM STATUS INDICATOR & CLEAR BUTTON (Restored)
+        st.divider()
+        if not st.session_state.active_event_data.empty:
+            st.info(f"📊 Currently Latched: {st.session_state.active_event_name}")
+            
+            c1, c2 = st.columns(2)
+            c1.metric("Guards in RAM", len(st.session_state.active_event_data))
+            
+            # Sum up total finalists across all classes
+            total_slots = sum(st.session_state.finals_slots.values())
+            c2.metric("Finals Slots", total_slots)
+
+            if st.button("🗑️ Clear Live Show (Reset RAM)"):
+                st.session_state.active_event_data = pd.DataFrame()
+                st.session_state.finals_slots = {}
+                st.session_state.active_event_name = "No Active Event"
+                st.rerun()
