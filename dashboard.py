@@ -22,22 +22,17 @@ if "admin_logged_in" not in st.session_state:
     latch = db["system_state"].find_one({"type": "admin_session"})
     st.session_state.admin_logged_in = True if latch else False
 
-# --- 1. SYSTEM INITIALIZATION: Cold Boot Logic ---
+# --- 1. SYSTEM INITIALIZATION: Volatile Boot ---
+# We are NOT checking MongoDB here. This ensures a push to GitHub 
+# results in a 'Cold Boot' with no data and no active login.
+
 if "active_event_data" not in st.session_state:
-    # Probe MongoDB for a 'latched' session from the Admin tab
-    saved = db["live_state"].find_one({"type": "current_session"})
-    
-    if saved:
-        # Warm Boot: Restore the competition you previously synced
-        st.session_state.active_event_data = pd.DataFrame(saved['data'])
-        st.session_state.finals_slots = saved['slots']
-        st.session_state.active_event_name = saved['name']
-        st.session_state.active_urls = saved.get('urls', {})
-    else:
-        # Cold Boot: System stays idle until Admin syncs a show
-        st.session_state.active_event_data = pd.DataFrame()
-        st.session_state.finals_slots = {}
-        st.session_state.active_event_name = None
+    st.session_state.active_event_data = pd.DataFrame()
+    st.session_state.finals_slots = {}
+    st.session_state.active_event_name = None
+
+if "admin_logged_in" not in st.session_state:
+    st.session_state.admin_logged_in = False
 
 # --- 4. National Data Loader ---
 @st.cache_data(ttl=300)
@@ -193,16 +188,21 @@ with tab3:
 
 # --- TAB 4: ADMIN (RESTORED SYNC OPTION) ---
 with tab4:
+    with tab4:
+    # Logic is now strictly Session-Based
     if not st.session_state.admin_logged_in:
-        pwd = st.text_input("Password", type="password")
+        st.header("🔐 Admin Access")
+        admin_pwd = st.text_input("Enter Password", type="password")
         if st.button("Authorize"):
-            if pwd == st.secrets["ADMIN_PASS"]:
-                db["system_state"].update_one({"type": "admin_session"}, {"$set": {"active": True}}, upsert=True)
-                st.session_state.admin_logged_in = True; st.rerun()
+            if admin_pwd == st.secrets["ADMIN_PASS"]:
+                st.session_state.admin_logged_in = True
+                # REMOVED: db["system_state"].update_one(...)
+                st.rerun()
     else:
-        st.success("🛰️ System Link Established")
+        st.success("🛰️ System Link Established (Current Session Only)")
         if st.button("Logout"):
-            db["system_state"].delete_one({"type": "admin_session"}); st.session_state.admin_logged_in = False; st.rerun()
+            st.session_state.admin_logged_in = False
+            st.rerun()
         
         # MANIFEST FIX: Ensure manifest is ALWAYS loaded for the dropdown
         if 'found_events' not in st.session_state:
