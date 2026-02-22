@@ -76,69 +76,59 @@ def get_manifest_events():
 
 # --- 3. LIVE PROBE (The Playwright Scraper) ---
 def pull_dual_event_data(prelims_url, finals_url):
-    """
-    Uses Playwright to capture dynamic <td> data from CompetitionSuite.
-    Think of this as a 'Logic Analyzer' for the live score stream.
-    """
     try:
         with sync_playwright() as p:
-            # Cloud-optimized browser launch
-            browser = p.chromium.launch(
-                headless=True,
-                args=["--no-sandbox", "--disable-setuid-sandbox"]
-            )
-            context = browser.new_context(user_agent="Mozilla/5.0")
-            page = context.new_page()
-
-            # --- CHANNEL A: PRELIMS (SCORES) ---
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
+            page = browser.new_page()
+            
+            # --- CHANNEL A: PRELIMS ---
             page.goto(prelims_url, wait_until="networkidle", timeout=45000)
+            # EXTRA CAPACITANCE: Wait 5 seconds for the scores to populate
+            time.sleep(5) 
+            
             soup = BeautifulSoup(page.content(), 'html.parser')
+            rows = soup.find_all('tr')
             
             prelims_data = []
-            table = soup.find('table')
-            if table:
-                # Iterating through rows to find Guard, Class, and Score
-                for row in table.find_all('tr')[1:]:  # Skip header
-                    cols = row.find_all('td')
-                    if len(cols) >= 4:
-                        name = cols[1].get_text(strip=True)
-                        g_class = cols[2].get_text(strip=True)
-                        time_str = cols[0].get_text(strip=True)
-                        score_str = cols[3].get_text(strip=True)
-                        
-                        # Logic level conversion (String to Float)
-                        try:
-                            score_val = float(score_str)
-                        except (ValueError, TypeError):
-                            score_val = 0.0
+            # We skip the first row (Header)
+            for row in rows[1:]:
+                cols = row.find_all('td')
+                # Calibrated for: Time, Guard, Class, Score
+                if len(cols) >= 4:
+                    name = cols[1].get_text(strip=True)
+                    g_class = cols[2].get_text(strip=True)
+                    time_str = cols[0].get_text(strip=True)
+                    score_str = cols[3].get_text(strip=True)
+                    
+                    # Clean the signal: convert score string to float
+                    try:
+                        score_val = float(score_str) if score_str else 0.0
+                    except:
+                        score_val = 0.0
 
-                        if name and g_class:
-                            prelims_data.append({
-                                "Guard": name,
-                                "Class": g_class,
-                                "Perform Time": time_str,
-                                "Score": score_val
-                            })
+                    if name and g_class:
+                        prelims_data.append({
+                            "Guard": name, "Class": g_class, 
+                            "Perform Time": time_str, "Score": score_val
+                        })
 
             # --- CHANNEL B: FINALS (SLOTS) ---
-            finals_slots = {}
+            f_slots = {}
             if finals_url:
-                page.goto(finals_url, wait_until="networkidle", timeout=45000)
+                page.goto(finals_url, wait_until="networkidle")
+                time.sleep(3)
                 f_soup = BeautifulSoup(page.content(), 'html.parser')
-                f_table = f_soup.find('table')
-                if f_table:
-                    for f_row in f_table.find_all('tr'):
-                        f_cols = f_row.find_all('td')
-                        if len(f_cols) >= 3:
-                            s_class = f_cols[2].get_text(strip=True)
-                            finals_slots[s_class] = finals_slots.get(s_class, 0) + 1
-
+                for f_row in f_soup.find_all('tr'):
+                    f_cols = f_row.find_all('td')
+                    if len(f_cols) >= 3:
+                        s_class = f_cols[2].get_text(strip=True)
+                        f_slots[s_class] = f_slots.get(s_class, 0) + 1
+            
             browser.close()
-            return pd.DataFrame(prelims_data), finals_slots
-
+            # Return the finalized packets
+            return pd.DataFrame(prelims_data), f_slots
     except Exception as e:
-        # Returning empty structures on fault to prevent UI crash
-        print(f"Scraper Logic Error: {e}")
+        print(f"Hardware Fault: {e}")
         return pd.DataFrame(), {}
 
 # --- 4. ANALYTICS SCRAPER (Standard Requests) ---
