@@ -91,26 +91,27 @@ def pull_dual_event_data(prelims_url, finals_url):
             
             prelims_data = []
             # We skip the first row (Header)
-            for row in rows[1:]:
-                cols = row.find_all('td')
-                # Calibrated for: Time, Guard, Class, Score
-                if len(cols) >= 4:
-                    name = cols[1].get_text(strip=True)
-                    g_class = cols[2].get_text(strip=True)
-                    time_str = cols[0].get_text(strip=True)
-                    score_str = cols[3].get_text(strip=True)
-                    
-                    # Clean the signal: convert score string to float
-                    try:
-                        score_val = float(score_str) if score_str else 0.0
-                    except:
-                        score_val = 0.0
+            if len(rows) > 1:
+                for row in rows[1:]:
+                    cols = row.find_all('td')
+                    # Calibrated for: Time, Guard, Class, Score
+                    if len(cols) >= 4:
+                        name = cols[1].get_text(strip=True)
+                        g_class = cols[2].get_text(strip=True)
+                        time_str = cols[0].get_text(strip=True)
+                        score_str = cols[3].get_text(strip=True)
+                        
+                        # Clean the signal: convert score string to float
+                        try:
+                            score_val = float(score_str) if score_str else 0.0
+                        except:
+                            score_val = 0.0
 
-                    if name and g_class:
-                        prelims_data.append({
-                            "Guard": name, "Class": g_class, 
-                            "Perform Time": time_str, "Score": score_val
-                        })
+                        if name and g_class:
+                            prelims_data.append({
+                                "Guard": name, "Class": g_class, 
+                                "Perform Time": time_str, "Score": score_val
+                            })
 
             # --- CHANNEL B: FINALS (SLOTS) ---
             f_slots = {}

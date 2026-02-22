@@ -225,12 +225,13 @@ with tab4:
                     
                     # Execute the Playwright Scraper
                     df_live, f_slots = pull_dual_event_data(p_url, f_url)
-                    
+
                     if not df_live.empty:
+                        # Latching the values into session RAM
                         st.session_state.active_event_data = df_live
                         st.session_state.finals_slots = f_slots
                         st.session_state.active_event_name = selected_show
-                        st.success(f"✅ {selected_show} Latched to RAM")
+                        st.success(f"✅ {len(df_live)} Guards Latched") # This confirms the record count
                         st.rerun()
                     else:
                         st.error("Signal Lost: No data returned from scraper.")
