@@ -83,26 +83,37 @@ def pull_dual_event_data(prelims_url, finals_url):
             
             # --- CHANNEL A: PRELIMS ---
             page.goto(prelims_url, wait_until="networkidle", timeout=45000)
-            # EXTRA CAPACITANCE: Wait 5 seconds for the scores to populate
-            time.sleep(5) 
+            page.wait_for_timeout(5000) # Give the JS clock time to cycle
             
-            soup = BeautifulSoup(page.content(), 'html.parser')
-            rows = soup.find_all('tr')
+            # Probing for the table body directly
+            content = page.content()
+            soup = BeautifulSoup(content, 'html.parser')
+            
+            # Look for the specific CompetitionSuite table class if it exists, 
+            # otherwise grab the first available table
+            table = soup.find('table')
             
             prelims_data = []
-            # We skip the first row (Header)
-            if len(rows) > 1:
-                for row in rows[1:]:
+            if table:
+                rows = table.find_all('tr')
+                # Log the raw 'pin count' to the serial monitor
+                print(f"DEBUG: Found {len(rows)} rows in table.") 
+                
+                for row in rows:
                     cols = row.find_all('td')
-                    # Calibrated for: Time, Guard, Class, Score
+                    # CompetitionSuite Standard: Time(0), Guard(1), Class(2), Score(3)
                     if len(cols) >= 4:
                         name = cols[1].get_text(strip=True)
                         g_class = cols[2].get_text(strip=True)
                         time_str = cols[0].get_text(strip=True)
                         score_str = cols[3].get_text(strip=True)
                         
-                        # Clean the signal: convert score string to float
+                        # Filter out header rows that contain 'Group' or 'Class' text
+                        if "Group" in name or "Class" in name:
+                            continue
+
                         try:
+                            # Convert score string (e.g., "78.450") to float
                             score_val = float(score_str) if score_str else 0.0
                         except:
                             score_val = 0.0
@@ -112,24 +123,26 @@ def pull_dual_event_data(prelims_url, finals_url):
                                 "Guard": name, "Class": g_class, 
                                 "Perform Time": time_str, "Score": score_val
                             })
-
+            
             # --- CHANNEL B: FINALS (SLOTS) ---
             f_slots = {}
             if finals_url:
                 page.goto(finals_url, wait_until="networkidle")
-                time.sleep(3)
+                page.wait_for_timeout(3000)
                 f_soup = BeautifulSoup(page.content(), 'html.parser')
-                for f_row in f_soup.find_all('tr'):
-                    f_cols = f_row.find_all('td')
-                    if len(f_cols) >= 3:
-                        s_class = f_cols[2].get_text(strip=True)
-                        f_slots[s_class] = f_slots.get(s_class, 0) + 1
+                f_table = f_soup.find('table')
+                if f_table:
+                    for f_row in f_table.find_all('tr'):
+                        f_cols = f_row.find_all('td')
+                        if len(f_cols) >= 3:
+                            s_class = f_cols[2].get_text(strip=True)
+                            if s_class and s_class != "Class":
+                                f_slots[s_class] = f_slots.get(s_class, 0) + 1
             
             browser.close()
-            # Return the finalized packets
             return pd.DataFrame(prelims_data), f_slots
     except Exception as e:
-        print(f"Hardware Fault: {e}")
+        print(f"Scraper Hardware Fault: {e}")
         return pd.DataFrame(), {}
 
 # --- 4. ANALYTICS SCRAPER (Standard Requests) ---
