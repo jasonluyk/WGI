@@ -12,7 +12,7 @@ import os
 
 
 # Connect to MongoDB
-mongo_url = os.environ.get("MONGO_URI") 
+mongo_url = st.secrets["MONGO_URI"]
 client = pymongo.MongoClient(mongo_url)
 db = client["rankings_2026"]
 national_collection = db["wgi_analytics"]

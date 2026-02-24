@@ -11,7 +11,7 @@ st.set_page_config(page_title="WGI 2026 Analytics", layout="wide", page_icon="ðŸ
 
 @st.cache_resource
 def init_connection():
-    mongo_url = os.environ.get("MONGO_URI")
+    mongo_url = st.secrets["MONGO_URI"]
     client = pymongo.MongoClient(mongo_url)
     return client
 
