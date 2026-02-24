@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import pymongo
@@ -10,7 +11,9 @@ st.set_page_config(page_title="WGI 2026 Analytics", layout="wide", page_icon="ðŸ
 
 @st.cache_resource
 def init_connection():
-    return pymongo.MongoClient(st.secrets["MONGO_URI"])
+    mongo_url = os.environ.get("MONGO_URI")
+    client = pymongo.MongoClient(mongo_url)
+    return client
 
 client = init_connection()
 db = client["rankings_2026"]

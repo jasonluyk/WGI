@@ -8,10 +8,12 @@ import re
 import requests
 import pdfplumber
 import io
+import os
 
 
 # Connect to MongoDB
-client = pymongo.MongoClient(st.secrets["MONGO_URI"])
+mongo_url = os.environ.get("MONGO_URI") 
+client = pymongo.MongoClient(mongo_url)
 db = client["rankings_2026"]
 national_collection = db["wgi_analytics"]
 live_collection = db["live_state"]
