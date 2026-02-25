@@ -464,6 +464,77 @@ def scrape_archive(show_id, event_name):
         )
         print("❌ [WORKER] Archive finished, but no scores were found.")
 
+def scrape_projection(show_name, prelims_url, finals_url):
+    """
+    Lean version of scrape_live_show — same roster + spot parsing,
+    but replaces live scores with season averages from wgi_analytics.
+    """
+    print(f"🔮 [WORKER] Building Projection for: {show_name}...")
+    combined_data = {}
+    class_spots = {}
+
+    # --- PASS 1: Roster from prelims PDF (identical to Live Hub) ---
+    if prelims_url and prelims_url.lower().endswith('.pdf'):
+        parse_pdf_schedule(prelims_url, combined_data)
+    else:
+        db["projection_state"].update_one(
+            {"type": "current_projection"},
+            {"$set": {"status": "failed", "error": "Only PDF schedule URLs are supported."}},
+            upsert=True
+        )
+        return
+
+    if not combined_data:
+        db["projection_state"].update_one(
+            {"type": "current_projection"},
+            {"$set": {"status": "failed", "error": "No guards found in PDF. Is the schedule posted yet?"}},
+            upsert=True
+        )
+        return
+
+    print(f"✅ Found {len(combined_data)} guards in roster.")
+
+    # --- PASS 2: Finals spot counts from finals PDF (identical to Live Hub) ---
+    if finals_url and finals_url.lower().endswith('.pdf'):
+        count_pdf_finals_spots(finals_url, class_spots)
+        print(f"✅ Finals spots: {class_spots}")
+
+    # --- PASS 3: Replace live scores with season averages from MongoDB ---
+    for guard_name, guard_data in combined_data.items():
+        base_class = guard_data["Class"].split(" - ")[0].strip()
+
+        scores = list(db["wgi_analytics"].find(
+            {"Guard": guard_name, "Class": base_class},
+            {"_id": 0, "Score": 1}
+        ))
+
+        if scores:
+            avg = round(sum(s["Score"] for s in scores) / len(scores), 3)
+            combined_data[guard_name]["Prelims Score"] = avg
+            combined_data[guard_name]["Shows Attended"] = len(scores)
+        # If no data, Prelims Score stays 0.0 from parse_pdf_schedule
+
+    # --- SAVE TO MONGODB ---
+    final_list = list(combined_data.values())
+    if final_list:
+        db["projection_state"].update_one(
+            {"type": "current_projection"},
+            {"$set": {
+                "show_name": show_name,
+                "data": final_list,
+                "spots": class_spots,
+                "status": "complete"
+            }},
+            upsert=True
+        )
+        print(f"🎉 [WORKER] Projection complete! {len(final_list)} guards saved.")
+    else:
+        db["projection_state"].update_one(
+            {"type": "current_projection"},
+            {"$set": {"status": "failed", "error": "No projection data generated."}},
+            upsert=True
+        )
+
 # =====================================================================
 # --- THE WORKER BRAIN (Command Listener) ---
 # =====================================================================
@@ -501,6 +572,13 @@ if __name__ == "__main__":
                     scrape_archive(
                         command.get("show_id"), 
                         command.get("event_name")
+                    )
+
+                elif action == "sync_projection":
+                    scrape_projection(
+                        command.get("show_name"),
+                        command.get("prelims_url"),
+                        command.get("finals_url")
                     )
                     
             except Exception as e:

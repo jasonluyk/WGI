@@ -171,7 +171,7 @@ def calculate_advancement(df, event_name, class_spots):
     return df
 
 st.title("🏆 WGI 2026 Color Guard Analytics")
-tab1, tab2, tab3, tab5, tab4 = st.tabs(["Overview", "National Stats", "Live Hub", "Past Events", "Admin"])
+tab1, tab2, tab3, tab5, tab6, tab4  = st.tabs(["Overview", "National Stats", "Live Hub", "Past Events","Projector", "Admin"])
 
 # --- TAB 1: National Rankings ---
 with tab1:
@@ -548,10 +548,63 @@ with tab4:
                     st.toast(f"Saved links and latched onto {selected_show_name}!")
             else:
                 st.info("⏳ Waiting for Auto-Discovery to find upcoming events. You can check 'Include Past Events' to view older shows.")
-                
+               
         if st.button("🗑️ Clear Live Data"):
             db["live_state"].delete_many({})
             db["system_state"].delete_one({"type": "active_show_name"})
+            st.rerun()
+        
+        st.divider()
+        st.subheader("3. Future Show Projector")
+
+        proj_status_doc = db["projection_state"].find_one({"type": "current_projection"})
+        if proj_status_doc and proj_status_doc.get("status") == "complete":
+            st.success(f"✅ Projection loaded: {proj_status_doc.get('show_name')}")
+
+        all_proj_events = list(db["event_metadata"].find({}, {"_id": 0}))
+
+        if not all_proj_events:
+            st.warning("No events found. Run Auto-Discover first.")
+        else:
+            proj_candidates = sorted(all_proj_events, key=lambda x: x.get("name", ""))
+            proj_event_options = {e["name"]: e for e in proj_candidates}
+
+            selected_proj_event = st.selectbox(
+                "Select Future Show:",
+                list(proj_event_options.keys()),
+                key="proj_event_select"
+            )
+
+            if selected_proj_event:
+                proj_event_data = proj_event_options[selected_proj_event]
+                proj_p_url = proj_event_data.get("p_url", "")
+                proj_f_url = proj_event_data.get("f_url", "")
+
+                col1, col2 = st.columns(2)
+                col1.write(f"**Prelims:** `{proj_p_url if proj_p_url else 'Not set'}`")
+                col2.write(f"**Finals:** `{proj_f_url if proj_f_url else 'Not set'}`")
+
+                if not proj_p_url:
+                    st.warning("No prelims URL for this event. Set it in Live Event Control above.")
+
+                if st.button("🔮 Build Projection", disabled=not proj_p_url):
+                    db["projection_state"].update_one(
+                        {"type": "current_projection"},
+                        {"$set": {"status": "loading", "show_name": selected_proj_event}},
+                        upsert=True
+                    )
+                    db["system_state"].insert_one({
+                        "type": "scraper_command",
+                        "action": "sync_projection",
+                        "show_name": selected_proj_event,
+                        "prelims_url": proj_p_url,
+                        "finals_url": proj_f_url
+                    })
+                    st.toast(f"Projection command sent for {selected_proj_event}!")
+                    st.rerun()
+
+        if st.button("🗑️ Clear Projection"):
+            db["projection_state"].delete_many({})
             st.rerun()
 
 # --- TAB 5: Past Events Archive ---
@@ -643,3 +696,52 @@ with tab5:
                 
         elif selected_archive != "-- Choose an Event --":
             st.info("Click 'Request Scores' to command the background worker to fetch the data.")
+
+with tab6:
+    st.header("🔮 Future Show Projector")
+    st.caption("Projects standings for an upcoming show based on each team's season average.")
+
+    proj_doc = db["projection_state"].find_one({"type": "current_projection"})
+
+    if proj_doc and proj_doc.get("status") == "loading":
+        st_autorefresh(interval=3000, key="proj_refresh")
+        st.spinner("Worker is building projection...")
+    elif not proj_doc or proj_doc.get("status") != "complete":
+        if proj_doc and proj_doc.get("status") == "failed":
+            st.error(f"❌ {proj_doc.get('error', 'Unknown error')}")
+        else:
+            st.info("No projection loaded yet. Use the Admin tab → Future Show Projector.")
+    else:
+        show_name = proj_doc.get("show_name", "Unknown Show")
+        proj_data = proj_doc.get("data", [])
+        proj_spots = proj_doc.get("spots", {})
+
+        if not proj_data:
+            st.warning("No data found in projection.")
+        else:
+            st.success(f"📍 Projecting: **{show_name}**")
+            proj_df = pd.DataFrame(proj_data)
+
+            # Reuse calculate_advancement exactly like the Live Hub
+            proj_df = calculate_advancement(proj_df, show_name, proj_spots)
+
+            classes = sorted(proj_df["Class"].unique())
+            class_tabs = st.tabs(classes)
+
+            for i, cls in enumerate(classes):
+                with class_tabs[i]:
+                    class_df = proj_df[proj_df["Class"] == cls].copy()
+                    class_df = class_df.sort_values("Prelims Score", ascending=False)
+
+                    col1, col2 = st.columns(2)
+                    col1.metric("Teams Registered", len(class_df))
+                    col2.metric("Teams With Season Data", len(class_df[class_df["Prelims Score"] > 0]))
+
+                    display_cols = class_df[["Guard", "Prelims Score", "Status"]].copy()
+                    display_cols = display_cols.rename(columns={"Prelims Score": "Avg Score"})
+                    display_cols["Avg Score"] = display_cols["Avg Score"].apply(
+                        lambda x: f"{x:.3f}" if x > 0 else "No Data"
+                    )
+                    display_cols.insert(0, "Proj. Rank", range(1, len(display_cols) + 1))
+
+                    st.dataframe(display_cols, hide_index=True, use_container_width=True)
