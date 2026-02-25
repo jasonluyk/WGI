@@ -3,6 +3,6 @@ streamlit-autorefresh
 pandas
 requests
 beautifulsoup4
-pymongo[srv]
+pymongo
 playwright
 pdfplumber
