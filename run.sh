@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # 1. Force the server to download the Chromium browser right as it boots up
-playwright install chromium
-playwright install-deps chromium
+playwright install --with-deps chromium
 
 # 2. Start the infinite scraper loop in the background
 python scraper_worker.py &
