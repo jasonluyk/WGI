@@ -750,7 +750,7 @@ with tab6:
                             lambda x: f"{x:.3f}" if x > 0 else "No Data"
                         )
                         display_cols.insert(0, "Proj. Rank", range(1, len(display_cols) + 1))
-                        st.dataframe(display_cols, hide_index=True, use_container_width=True)
+                        st.dataframe(display_cols, hide_index=True, width='stretch')
 
                 # Render the combined SA tab if it exists
                 if len(sa_classes) > 1:
@@ -765,4 +765,4 @@ with tab6:
                         display_sa["Avg Score"] = display_sa["Avg Score"].apply(
                             lambda x: f"{x:.3f}" if x > 0 else "No Data"
                         )
-                        st.dataframe(display_sa, hide_index=True, use_container_width=True)
+                        st.dataframe(display_sa, hide_index=True, width='stretch')
