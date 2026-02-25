@@ -425,7 +425,7 @@ with tab4:
             if pwd == st.secrets["ADMIN_PASS"]:
                 st.session_state.admin_auth = True
                 cookies.set("authenticated", "true")
-                cookies.save()
+                
                 st.rerun()
             else:
                 st.error("❌ Access Denied.")
@@ -439,7 +439,7 @@ with tab4:
             if st.button("Logout"):
                 st.session_state.admin_auth = False
                 cookies.set("authenticated", "false")
-                cookies.save()
+                
                 st.rerun()
                 
         st.divider()
