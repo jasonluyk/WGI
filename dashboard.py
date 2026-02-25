@@ -457,29 +457,29 @@ with tab4:
         
         st.subheader("🛠️ Database Management")
         
-        # We make the button red/primary so you don't click it by accident during a live show!
-        if st.button("🌱 Seed Database (Run seed_db.py)", type="primary"):
-            with st.spinner("Running seed_db.py in the background..."):
-                try:
-                    # This tells the server to run the script and capture any print() statements
-                    result = subprocess.run(
-                        ["python", "seed_db.py"], 
-                        capture_output=True, 
-                        text=True, 
-                        check=True
-                    )
-                    st.success("Database seeded successfully!")
+        # # We make the button red/primary so you don't click it by accident during a live show!
+        # if st.button("🌱 Seed Database (Run seed_db.py)", type="primary"):
+        #     with st.spinner("Running seed_db.py in the background..."):
+        #         try:
+        #             # This tells the server to run the script and capture any print() statements
+        #             result = subprocess.run(
+        #                 ["python", "seed_db.py"], 
+        #                 capture_output=True, 
+        #                 text=True, 
+        #                 check=True
+        #             )
+        #             st.success("Database seeded successfully!")
                     
-                    # Show the terminal output in a dropdown so you can verify it worked
-                    with st.expander("View Terminal Output"):
-                        st.code(result.stdout)
+        #             # Show the terminal output in a dropdown so you can verify it worked
+        #             with st.expander("View Terminal Output"):
+        #                 st.code(result.stdout)
                         
-                except subprocess.CalledProcessError as e:
-                    st.error("🚨 Error running seed_db.py!")
-                    with st.expander("View Error Log"):
-                        st.code(e.stderr)
+        #         except subprocess.CalledProcessError as e:
+        #             st.error("🚨 Error running seed_db.py!")
+        #             with st.expander("View Error Log"):
+        #                 st.code(e.stderr)
 
-        st.divider()
+        # st.divider()
         st.subheader("2. Live Event Control")
         
         discovered_events = list(db["event_metadata"].find({}, {"_id": 0}))
