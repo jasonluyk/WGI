@@ -5,6 +5,7 @@ import pymongo
 import streamlit as st
 import re
 import os
+from scraper_worker import USER_AGENT
 
 def clean_class_name(raw_class):
     """Strips out WGI round/prelim/finals tags to keep classes unified."""
@@ -25,7 +26,8 @@ def scrape_all_wgi_to_mongo():
         # 1. Put on the mask (Spoofing a real Windows machine)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={"width": 1920, "height": 1080}
+            viewport={"width": 1920, "height": 1080},
+            user_agent=USER_AGENT
         )
 
         # 2. Open the page using that disguised context
