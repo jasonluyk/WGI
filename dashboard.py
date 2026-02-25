@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 import pymongo
 from streamlit_autorefresh import st_autorefresh
-from streamlit_cookies_manager import EncryptedCookieManager
+from streamlit_cookies_controller import CookieController
 
 
 
@@ -24,13 +24,7 @@ def init_connection():
 client = init_connection()
 db = client["rankings_2026"]
 
-cookies = EncryptedCookieManager(
-    prefix="wgi_admin_",
-    password=st.secrets["ADMIN_PASS"]
-)
-
-if not cookies.ready():
-    st.stop()
+cookies = CookieController()
 
 if "admin_auth" not in st.session_state:
     st.session_state.admin_auth = cookies.get("authenticated") == "true"
@@ -430,7 +424,7 @@ with tab4:
         if st.button("Login"):
             if pwd == st.secrets["ADMIN_PASS"]:
                 st.session_state.admin_auth = True
-                cookies["authenticated"] = "true"
+                cookies.set("authenticated", "true")
                 cookies.save()
                 st.rerun()
             else:
@@ -444,7 +438,7 @@ with tab4:
         with c2:
             if st.button("Logout"):
                 st.session_state.admin_auth = False
-                cookies["authenticated"] = "false"
+                cookies.set("authenticated", "false")
                 cookies.save()
                 st.rerun()
                 
