@@ -452,7 +452,7 @@ with tab4:
                 try:
                     # This tells the server to run the script and capture any print() statements
                     result = subprocess.run(
-                        ["python3", "seed_db.py"], 
+                        ["python", "seed_db.py"], 
                         capture_output=True, 
                         text=True, 
                         check=True
