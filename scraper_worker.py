@@ -210,12 +210,20 @@ def parse_pdf_schedule(pdf_url, combined_data):
                         
                         # Strip the City and State off the end of the guard name
                         if ',' in raw_front_text:
-                            # E.g., "Harrison HS Kennesaw, GA" -> "Harrison HS Kennesaw"
-                            guard_name = raw_front_text.rsplit(',', 1)[0]
-                            # "Harrison HS Kennesaw" -> "Harrison HS"
-                            guard_name = guard_name.rsplit(' ', 1)[0].strip()
+                            # Strip everything after the comma (city, state)
+                            guard_name = raw_front_text.rsplit(',', 1)[0].strip()
+                            # Strip the last word (city name before the comma e.g. "Kennesaw" or "Fort Mill" -> strip "Mill" then "Fort")
+                            # Keep stripping trailing words until we hit a school keyword
+                            school_keywords = ['HS', 'High', 'School', 'Academy', 'Guard', 'Winterguard', 'WG', 'Independent']
+                            parts = guard_name.split()
+                            while len(parts) > 1 and parts[-1] not in school_keywords:
+                                parts.pop()
+                            guard_name = ' '.join(parts).strip()
                         else:
                             guard_name = raw_front_text
+
+                        # Strip any leading single character (stray digits or letters from PDF columns)
+                        guard_name = re.sub(r'^[^A-Za-z]{1,2}\s+', '', guard_name).strip()
                         
                         # Build the full class name
                         base_clean = clean_class_name(class_map.get(base_abbr, base_abbr))
