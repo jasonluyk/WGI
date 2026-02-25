@@ -1,0 +1,36 @@
+name: WGI Nightly Database Seed
+
+on:
+  schedule:
+    # Runs every day at 4:00 AM Eastern (9:00 AM UTC)
+    - cron: '0 9 * * *'
+  
+  # Allows you to manually trigger it from the GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: |
+          python -m playwright install --with-deps chromium
+
+      - name: Run seed_db.py
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+        run: |
+          python seed_db.py
