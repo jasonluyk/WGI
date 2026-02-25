@@ -1,4 +1,5 @@
 import os
+import subprocess
 import streamlit as st
 import pandas as pd
 import pymongo
@@ -11,7 +12,12 @@ st.set_page_config(page_title="WGI 2026 Analytics", layout="wide", page_icon="�
 
 @st.cache_resource
 def init_connection():
-    mongo_url = st.secrets["MONGO_URI"]
+    # 1. Look in the cloud first...
+    mongo_url = os.environ.get("MONGO_URI")
+
+    # 2. If we are on your desktop, just use the Streamlit secrets file!
+    if not mongo_url:
+        mongo_url = st.secrets["MONGO_URI"]
     client = pymongo.MongoClient(mongo_url)
     return client
 
@@ -435,6 +441,32 @@ with tab4:
         if st.button("🚀 Auto-Discover WGI Events"):
             db["system_state"].insert_one({"type": "scraper_command", "action": "sync_national"})
             st.toast("Auto-Discovery command sent to Background Worker.")
+
+        st.divider()
+        
+        st.subheader("🛠️ Database Management")
+        
+        # We make the button red/primary so you don't click it by accident during a live show!
+        if st.button("🌱 Seed Database (Run seed_db.py)", type="primary"):
+            with st.spinner("Running seed_db.py in the background..."):
+                try:
+                    # This tells the server to run the script and capture any print() statements
+                    result = subprocess.run(
+                        ["python", "seed_db.py"], 
+                        capture_output=True, 
+                        text=True, 
+                        check=True
+                    )
+                    st.success("Database seeded successfully!")
+                    
+                    # Show the terminal output in a dropdown so you can verify it worked
+                    with st.expander("View Terminal Output"):
+                        st.code(result.stdout)
+                        
+                except subprocess.CalledProcessError as e:
+                    st.error("🚨 Error running seed_db.py!")
+                    with st.expander("View Error Log"):
+                        st.code(e.stderr)
 
         st.divider()
         st.subheader("2. Live Event Control")

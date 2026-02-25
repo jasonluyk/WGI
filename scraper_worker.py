@@ -12,7 +12,12 @@ import os
 
 
 # Connect to MongoDB
-mongo_url = st.secrets["MONGO_URI"]
+# 1. Look in the cloud first...
+mongo_url = os.environ.get("MONGO_URI")
+
+# 2. If we are on your desktop, just use the Streamlit secrets file!
+if not mongo_url:
+    mongo_url = st.secrets["MONGO_URI"]
 client = pymongo.MongoClient(mongo_url)
 db = client["rankings_2026"]
 national_collection = db["wgi_analytics"]

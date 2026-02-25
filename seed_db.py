@@ -15,18 +15,18 @@ def scrape_all_wgi_to_mongo():
     master_dict = {}
 
     with sync_playwright() as p:
-        print("🚀 Launching browser...")
+        print("Launching browser...")
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
 
         # --- PART 1: GET ALL WGI EVENT URLs AND SHOW NAMES ---
-        print("🔍 Fetching master list of WGI events...")
+        print("Fetching master list of WGI events...")
         page.goto("https://www.wgi.org/scores/color-guard-scores/")
         
         try:
             page.wait_for_selector("a[href*='ShowId']", timeout=20000)
         except Exception:
-            print("⚠️ Timeout waiting for main page links.")
+            print("Timeout waiting for main page links.")
         
         soup = BeautifulSoup(page.content(), 'html.parser')
         live_shows = {}
@@ -48,11 +48,11 @@ def scrape_all_wgi_to_mongo():
                 full_url = href if href.startswith('http') else f"https://www.wgi.org{href}"
                 live_shows[full_url] = show_name
         
-        print(f"🎯 Found {len(live_shows)} unique regional events.")
+        print(f"Found {len(live_shows)} unique regional events.")
 
         # --- PART 2: SCRAPE EVERY EVENT USING YOUR TRUSTED LOGIC ---
         for idx, (url, show_name) in enumerate(live_shows.items()):
-            print(f"📥 Scraping event {idx + 1} of {len(live_shows)}: {show_name}...")
+            print(f"Scraping event {idx + 1} of {len(live_shows)}: {show_name}...")
             try:
                 page.goto(url)
                 page.wait_for_selector("table", timeout=15000)
@@ -94,7 +94,7 @@ def scrape_all_wgi_to_mongo():
                             except (ValueError, IndexError):
                                 continue
             except Exception as e:
-                print(f"   ⏭️ No data or timeout at {show_name}.")
+                print(f"No data or timeout at {show_name}.")
         
         browser.close()
 
@@ -105,7 +105,15 @@ def scrape_all_wgi_to_mongo():
         df = pd.DataFrame(master_list)
 
         print("\nConnecting to MongoDB...")
-        client = pymongo.MongoClient(st.secrets["MONGO_URI"])
+        # 1. Look in the cloud environment first
+        mongo_url = os.environ.get("MONGO_URI")
+
+        # 2. If it's empty (running locally), use Streamlit secrets
+        if not mongo_url:
+            mongo_url = st.secrets["MONGO_URI"]
+
+        client = pymongo.MongoClient(mongo_url)
+        
         db = client["rankings_2026"]
         collection = db["wgi_analytics"]
 
@@ -115,9 +123,9 @@ def scrape_all_wgi_to_mongo():
         records = df.to_dict("records")
         collection.insert_many(records)
         
-        print(f"✅ Success! {len(records)} individual performances saved to MongoDB.")
+        print(f"Success! {len(records)} individual performances saved to MongoDB.")
     else:
-        print("❌ No data found across all tables.")
+        print("No data found across all tables.")
 
 if __name__ == "__main__":
     scrape_all_wgi_to_mongo()
