@@ -726,8 +726,6 @@ with tab6:
             proj_df = calculate_advancement(proj_df, show_name, proj_spots)
 
             classes = sorted(proj_df["Class"].unique())
-            class_tabs = st.tabs(classes)
-
             for i, cls in enumerate(classes):
                 sa_classes = [c for c in classes if "Scholastic A" in c]
                 if len(sa_classes) > 1:
