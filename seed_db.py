@@ -1,5 +1,4 @@
 import os
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/workspace/.cache/ms-playwright"
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 import pandas as pd
