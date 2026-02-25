@@ -6,3 +6,4 @@ beautifulsoup4
 pymongo
 playwright
 pdfplumber
+streamlit-cookies-manager

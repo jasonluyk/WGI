@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import pymongo
 from streamlit_autorefresh import st_autorefresh
+from streamlit_cookies_manager import EncryptedCookieManager
 
 
 
@@ -23,9 +24,16 @@ def init_connection():
 client = init_connection()
 db = client["rankings_2026"]
 
+cookies = EncryptedCookieManager(
+    prefix="wgi_admin_",
+    password=st.secrets["ADMIN_PASS"]
+)
+
+if not cookies.ready():
+    st.stop()
+
 if "admin_auth" not in st.session_state:
-    auth_doc = db["system_state"].find_one({"type": "admin_auth"})
-    st.session_state.admin_auth = auth_doc.get("authenticated", False) if auth_doc else False
+    st.session_state.admin_auth = cookies.get("authenticated") == "true"
 
 # This prevents us from having to scrape WGI's protected index page
 EVENT_LUT = {
@@ -416,22 +424,19 @@ with tab4:
     
     # 1. THE LOGIN SCREEN
     if not st.session_state.admin_auth:
-            st.info("🔒 Secure area. Please log in to access system controls.")
-            pwd = st.text_input("Admin Password", type="password", key="admin_login_pwd")
-            
-            if st.button("Login"):
-                if pwd == st.secrets["ADMIN_PASS"]:
-                    st.session_state.admin_auth = True
-                    db["system_state"].update_one(
-                        {"type": "admin_auth"},
-                        {"$set": {"authenticated": True}},
-                        upsert=True
-                    )
-                    st.rerun()
-                else:
-                    st.error("❌ Access Denied.")
-                    
-        # 2. THE CONTROL DECK (Only shows if authenticated)
+        st.info("🔒 Secure area. Please log in to access system controls.")
+        pwd = st.text_input("Admin Password", type="password", key="admin_login_pwd")
+        
+        if st.button("Login"):
+            if pwd == st.secrets["ADMIN_PASS"]:
+                st.session_state.admin_auth = True
+                cookies["authenticated"] = "true"
+                cookies.save()
+                st.rerun()
+            else:
+                st.error("❌ Access Denied.")
+                
+    # 2. THE CONTROL DECK (Only shows if authenticated)
     else:
         c1, c2 = st.columns([0.8, 0.2])
         with c1:
@@ -439,11 +444,9 @@ with tab4:
         with c2:
             if st.button("Logout"):
                 st.session_state.admin_auth = False
-                db["system_state"].update_one(
-                    {"type": "admin_auth"},
-                    {"$set": {"authenticated": False}},
-                    upsert=True
-                )
+                cookies["authenticated"] = "false"
+                cookies.save()
+                st.rerun()
                 
         st.divider()
         
