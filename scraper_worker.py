@@ -181,7 +181,7 @@ def parse_pdf_schedule(pdf_url, combined_data):
         "IO": "Independent Open",
         "IW": "Independent World"
     }
-    debug_log = open("root/WGI/pdf_debug.txt","w")
+    
     try:
         response = requests.get(pdf_url)
         with pdfplumber.open(io.BytesIO(response.content)) as pdf:
@@ -199,8 +199,6 @@ def parse_pdf_schedule(pdf_url, combined_data):
                     
                     if match:
                         raw_front_text = match.group(1).strip()
-                        debug_log.write(f"RAW: '{raw_front_text}'\n")
-                        debug_log.flush()
                         base_abbr = match.group(2).upper()
                         round_num = match.group(3) 
                         time_str = match.group(4).strip()
@@ -249,7 +247,7 @@ def parse_pdf_schedule(pdf_url, combined_data):
                             "Finals Time": "", "Finals Score": 0.0
                         }
                         print(f"➕ Found Guard: {guard_name} ({g_class}) @ {time_str}")
-        debug_log.close()                
+                       
     except Exception as e:
         print(f"⚠️ [WORKER] PDF Parser Failed: {e}")
 
