@@ -3,9 +3,6 @@
 export PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
 source /root/WGI/venv/bin/activate
 
-# Populate the database at first run
-python seed_db.py
-
 # Start the infinite scraper loop in the background
 python scraper_worker.py &
 
