@@ -450,36 +450,32 @@ with tab4:
         # --- YOUR EXISTING ADMIN CONTROLS GO HERE ---
         st.subheader("1. System Discovery")
         if st.button("🚀 Auto-Discover WGI Events"):
+            db["system_state"].update_one(
+                {"type": "discovery_status"},
+                {"$set": {"status": "running"}},
+                upsert=True
+            )
             db["system_state"].insert_one({"type": "scraper_command", "action": "sync_national"})
-            st.toast("Auto-Discovery command sent to Background Worker.")
+            st.rerun()
+
+        # Show status indicator
+        discovery_doc = db["system_state"].find_one({"type": "discovery_status"})
+        if discovery_doc:
+            status = discovery_doc.get("status")
+            if status == "running":
+                with st.spinner("Auto-Discovery running in background..."):
+                    import time
+                    time.sleep(2)
+                    st.rerun()
+            elif status == "complete":
+                count = discovery_doc.get("count", 0)
+                st.success(f"✅ Auto-Discovery complete! {count} events found.")
+            elif status == "failed":
+                st.error(f"❌ Auto-Discovery failed: {discovery_doc.get('error', 'Unknown error')}")
+        
+        
 
         st.divider()
-        
-        st.subheader("🛠️ Database Management")
-        
-        # # We make the button red/primary so you don't click it by accident during a live show!
-        # if st.button("🌱 Seed Database (Run seed_db.py)", type="primary"):
-        #     with st.spinner("Running seed_db.py in the background..."):
-        #         try:
-        #             # This tells the server to run the script and capture any print() statements
-        #             result = subprocess.run(
-        #                 ["python", "seed_db.py"], 
-        #                 capture_output=True, 
-        #                 text=True, 
-        #                 check=True
-        #             )
-        #             st.success("Database seeded successfully!")
-                    
-        #             # Show the terminal output in a dropdown so you can verify it worked
-        #             with st.expander("View Terminal Output"):
-        #                 st.code(result.stdout)
-                        
-        #         except subprocess.CalledProcessError as e:
-        #             st.error("🚨 Error running seed_db.py!")
-        #             with st.expander("View Error Log"):
-        #                 st.code(e.stderr)
-
-        # st.divider()
         st.subheader("2. Live Event Control")
         
         discovered_events = list(db["event_metadata"].find({}, {"_id": 0}))

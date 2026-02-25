@@ -154,8 +154,18 @@ def scrape_national_scores():
     if event_metadata_list:
         db["event_metadata"].delete_many({})
         db["event_metadata"].insert_many(event_metadata_list)
+        db["system_state"].update_one(
+            {"type": "discovery_status"},
+            {"$set": {"status": "complete", "count": len(event_metadata_list)}},
+            upsert=True
+        )
         print(f"🎉 [WORKER] Zero-Touch Sync Complete! {len(event_metadata_list)} total events ready in UI.")
     else:
+        db["system_state"].update_one(
+            {"type": "discovery_status"},
+            {"$set": {"status": "failed", "error": "No events found"}},
+            upsert=True
+        )
         print("❌ [WORKER] Discovery failed. No events found.")
 
 def parse_pdf_schedule(pdf_url, combined_data):
