@@ -192,7 +192,6 @@ def parse_pdf_schedule(pdf_url, combined_data):
                 for line in text.split('\n'):
                     line = line.strip()
                     
-                    # Skip the giant diagonal "D R A F T" watermark
                     if len(line) < 5: continue
                         
                     match = re.search(r'^(.*?)\s+(SRA|SA|SO|SW|IRA|IA|IO|IW)(?:\s*-\s*ROUND\D*(\d+))?\s+(\d{1,2}:\d{2}\s*[AP]M)$', line, re.IGNORECASE)
@@ -204,15 +203,10 @@ def parse_pdf_schedule(pdf_url, combined_data):
                         time_str = match.group(4).strip()
                         
                         if ',' in raw_front_text:
-                            # Strip state (everything after last comma e.g. ", SC")
                             before_comma = raw_front_text.rsplit(',', 1)[0].strip()
-                            
-                            # Remove zip codes and parenthetical state codes e.g. "(NC)", "33463"
                             before_comma = re.sub(r'\(\w{2}\)', '', before_comma).strip()
                             before_comma = re.sub(r'\b\d{5}\b', '', before_comma).strip()
                             
-                            # Find the LAST school/group keyword and cut everything after it
-                            # Keeps JV/Varsity/A/B since they appear BEFORE the city
                             school_pattern = re.search(
                                 r'^(.*?(?:High School|HS|Academy|Winterguard|WG|Independent|Performing Arts|Visual Productions|Nuance\s+\w+)(?:\s+(?:JV|Varsity|[A-Z]))?)',
                                 before_comma, re.IGNORECASE
@@ -220,21 +214,19 @@ def parse_pdf_schedule(pdf_url, combined_data):
                             if school_pattern:
                                 guard_name = school_pattern.group(1).strip()
                             else:
-                                # No keyword found (e.g. "Paramount", "Etude", "First Flight")
-                                # Strip last word as city
                                 guard_name = before_comma.rsplit(' ', 1)[0].strip()
-
                         else:
                             guard_name = raw_front_text
 
-                        # Strip leading stray single capital letter (e.g. "D East Lincoln" -> "East Lincoln")
+                        # Strip leading stray single capital letter (e.g. "DEast" -> "East")
                         guard_name = re.sub(r'^[A-Z](?=[A-Z])', '', guard_name).strip()
-
                         # Strip leading stray digits
                         guard_name = re.sub(r'^\d+\s+', '', guard_name).strip()
-
-                        # Strip trailing truncation artifacts (e.g. "from Ge…")
+                        # Strip trailing truncation artifacts
                         guard_name = re.sub(r'\s+from\s+\w+…?$', '', guard_name, flags=re.IGNORECASE).strip()
+                        
+                        # Build the full class name
+                        base_clean = clean_class_name(class_map.get(base_abbr, base_abbr))
                         
                         if round_num:
                             g_class = f"{base_clean} - Round {round_num}"
