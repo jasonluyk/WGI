@@ -1,4 +1,6 @@
 #!/bin/bash
+python seed_db.py
+
 
 export PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/ms-playwright
 playwright install --with-deps chromium
