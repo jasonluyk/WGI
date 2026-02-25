@@ -729,19 +729,40 @@ with tab6:
             class_tabs = st.tabs(classes)
 
             for i, cls in enumerate(classes):
-                with class_tabs[i]:
-                    class_df = proj_df[proj_df["Class"] == cls].copy()
-                    class_df = class_df.sort_values("Prelims Score", ascending=False)
+                sa_classes = [c for c in classes if "Scholastic A" in c]
+                if len(sa_classes) > 1:
+                    all_tabs = st.tabs(classes + ["📊 All Scholastic A"])
+                else:
+                    all_tabs = st.tabs(classes)
 
-                    col1, col2 = st.columns(2)
-                    col1.metric("Teams Registered", len(class_df))
-                    col2.metric("Teams With Season Data", len(class_df[class_df["Prelims Score"] > 0]))
+                for i, cls in enumerate(classes):
+                    with all_tabs[i]:
+                        class_df = proj_df[proj_df["Class"] == cls].copy()
+                        class_df = class_df.sort_values("Prelims Score", ascending=False)
 
-                    display_cols = class_df[["Guard", "Prelims Score", "Status"]].copy()
-                    display_cols = display_cols.rename(columns={"Prelims Score": "Avg Score"})
-                    display_cols["Avg Score"] = display_cols["Avg Score"].apply(
-                        lambda x: f"{x:.3f}" if x > 0 else "No Data"
-                    )
-                    display_cols.insert(0, "Proj. Rank", range(1, len(display_cols) + 1))
+                        col1, col2 = st.columns(2)
+                        col1.metric("Teams Registered", len(class_df))
+                        col2.metric("Teams With Season Data", len(class_df[class_df["Prelims Score"] > 0]))
 
-                    st.dataframe(display_cols, hide_index=True, use_container_width=True)
+                        display_cols = class_df[["Guard", "Prelims Score", "Status"]].copy()
+                        display_cols = display_cols.rename(columns={"Prelims Score": "Avg Score"})
+                        display_cols["Avg Score"] = display_cols["Avg Score"].apply(
+                            lambda x: f"{x:.3f}" if x > 0 else "No Data"
+                        )
+                        display_cols.insert(0, "Proj. Rank", range(1, len(display_cols) + 1))
+                        st.dataframe(display_cols, hide_index=True, use_container_width=True)
+
+                # Render the combined SA tab if it exists
+                if len(sa_classes) > 1:
+                    with all_tabs[-1]:
+                        st.caption("All rounds combined, ranked by average score.")
+                        sa_df = proj_df[proj_df["Class"].str.contains("Scholastic A")].copy()
+                        sa_df = sa_df.sort_values("Prelims Score", ascending=False).reset_index(drop=True)
+                        sa_df.insert(0, "Overall Rank", range(1, len(sa_df) + 1))
+
+                        display_sa = sa_df[["Overall Rank", "Guard", "Class", "Prelims Score", "Status"]].copy()
+                        display_sa = display_sa.rename(columns={"Prelims Score": "Avg Score", "Class": "Round"})
+                        display_sa["Avg Score"] = display_sa["Avg Score"].apply(
+                            lambda x: f"{x:.3f}" if x > 0 else "No Data"
+                        )
+                        st.dataframe(display_sa, hide_index=True, use_container_width=True)
