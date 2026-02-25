@@ -6,7 +6,6 @@ import pymongo
 import streamlit as st
 import re
 
-from scraper_worker import USER_AGENT
 
 def clean_class_name(raw_class):
     """Strips out WGI round/prelim/finals tags to keep classes unified."""
