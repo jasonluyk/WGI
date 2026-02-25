@@ -17,8 +17,26 @@ def scrape_all_wgi_to_mongo():
 
     with sync_playwright() as p:
         print("Launching browser...")
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+        browser = p.chromium.launch(
+            headless=True, 
+            args=["--disable-blink-features=AutomationControlled"]
+        )
+
+        # 1. Put on the mask (Spoofing a real Windows machine)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080}
+        )
+
+        # 2. Open the page using that disguised context
+        page = context.new_page()
+
+        # 3. Now go to the URL (Keep your 60s timeout!)
+        page.goto(
+            "https://www.wgi.org/scores/color-guard-scores/", 
+            timeout=60000, 
+            wait_until="domcontentloaded"
+        )
 
         # --- PART 1: GET ALL WGI EVENT URLs AND SHOW NAMES ---
         print("Fetching master list of WGI events...")

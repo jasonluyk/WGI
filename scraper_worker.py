@@ -47,7 +47,10 @@ def scrape_national_scores():
     master_events = {} 
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True, 
+            args=["--disable-blink-features=AutomationControlled"]
+        )
         context = browser.new_context(user_agent=USER_AGENT)
         page = context.new_page()
 
