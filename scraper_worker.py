@@ -195,11 +195,6 @@ def parse_pdf_schedule(pdf_url, combined_data):
                     # Skip the giant diagonal "D R A F T" watermark
                     if len(line) < 5: continue
                         
-                    # THE TARGETED REGEX:
-                    # Group 1: Everything before the Class (Guard + City)
-                    # Group 2: The exact Class Abbreviation (SA, SRA, etc.)
-                    # Group 3: The Round number (if it exists)
-                    # Group 4: Time (AM/PM)
                     match = re.search(r'^(.*?)\s+(SRA|SA|SO|SW|IRA|IA|IO|IW)(?:\s*-\s*ROUND\D*(\d+))?\s+(\d{1,2}:\d{2}\s*[AP]M)$', line, re.IGNORECASE)
                     
                     if match:
@@ -208,22 +203,30 @@ def parse_pdf_schedule(pdf_url, combined_data):
                         round_num = match.group(3) 
                         time_str = match.group(4).strip()
                         
-                        # Strip the City and State off the end of the guard name
+                        # --- GUARD NAME EXTRACTION ---
                         if ',' in raw_front_text:
-                            # Strip everything after the comma (city, state)
-                            guard_name = raw_front_text.rsplit(',', 1)[0].strip()
-                            # Strip the last word (city name before the comma e.g. "Kennesaw" or "Fort Mill" -> strip "Mill" then "Fort")
-                            # Keep stripping trailing words until we hit a school keyword
-                            school_keywords = ['HS', 'High', 'School', 'Academy', 'Guard', 'Winterguard', 'WG', 'Independent']
-                            parts = guard_name.split()
-                            while len(parts) > 1 and parts[-1] not in school_keywords:
-                                parts.pop()
-                            guard_name = ' '.join(parts).strip()
+                            # Strip state (everything after last comma e.g. ", SC")
+                            before_comma = raw_front_text.rsplit(',', 1)[0].strip()
+                            
+                            # Try to cut at a school keyword so multi-word cities get dropped
+                            # e.g. "Nations Ford HS Fort Mill" -> "Nations Ford HS"
+                            school_pattern = re.search(
+                                r'^(.*?(?:High School|High|HS|Academy|Guard|Winterguard|WG|Independent))',
+                                before_comma, re.IGNORECASE
+                            )
+                            if school_pattern:
+                                guard_name = school_pattern.group(1).strip()
+                            else:
+                                # Fallback: strip last word (single-word city)
+                                guard_name = before_comma.rsplit(' ', 1)[0].strip()
                         else:
                             guard_name = raw_front_text
 
-                        # Strip any leading single character (stray digits or letters from PDF columns)
-                        guard_name = re.sub(r'^[^A-Za-z]{1,2}\s+', '', guard_name).strip()
+                        # Strip leading stray digits (e.g. "1 East Lincoln HS")
+                        guard_name = re.sub(r'^\d+\s+', '', guard_name).strip()
+                        
+                        # Strip leading single capital letter (e.g. "D East Lincoln HS")
+                        guard_name = re.sub(r'^[A-Z]\s+(?=[A-Z])', '', guard_name).strip()
                         
                         # Build the full class name
                         base_clean = clean_class_name(class_map.get(base_abbr, base_abbr))
