@@ -4,6 +4,7 @@ import pandas as pd
 import pymongo
 import streamlit as st
 import re
+import os
 
 def clean_class_name(raw_class):
     """Strips out WGI round/prelim/finals tags to keep classes unified."""
@@ -21,7 +22,11 @@ def scrape_all_wgi_to_mongo():
 
         # --- PART 1: GET ALL WGI EVENT URLs AND SHOW NAMES ---
         print("Fetching master list of WGI events...")
-        page.goto("https://www.wgi.org/scores/color-guard-scores/")
+        page.goto(
+            "https://www.wgi.org/scores/color-guard-scores/", 
+            timeout=60000, 
+            wait_until="domcontentloaded"
+        )
         
         try:
             page.wait_for_selector("a[href*='ShowId']", timeout=20000)
