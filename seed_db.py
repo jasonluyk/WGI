@@ -1,10 +1,12 @@
+import os
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/workspace/.cache/ms-playwright"
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 import pandas as pd
 import pymongo
 import streamlit as st
 import re
-import os
+
 from scraper_worker import USER_AGENT
 
 def clean_class_name(raw_class):

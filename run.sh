@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 1. Force the server to download the Chromium browser right as it boots up
+export PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/ms-playwright
 playwright install --with-deps chromium
 
 # 2. Start the infinite scraper loop in the background

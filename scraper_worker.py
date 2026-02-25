@@ -1,3 +1,5 @@
+import os
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/workspace/.cache/ms-playwright"
 import time
 import pymongo
 import pandas as pd
@@ -8,7 +10,7 @@ import re
 import requests
 import pdfplumber
 import io
-import os
+
 
 
 # Connect to MongoDB
