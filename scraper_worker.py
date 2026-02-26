@@ -245,34 +245,62 @@ def parse_pdf_schedule(pdf_url, combined_data):
 
 def parse_html_schedule(html_url, combined_data, page):
     print(f"📡 [TRAFFIC COP] Routing to HTML Parser: {html_url}")
+    
+    class_map = {
+        "SRA": "Scholastic Regional A",
+        "SA": "Scholastic A",
+        "SO": "Scholastic Open",
+        "SW": "Scholastic World",
+        "IRA": "Independent Regional A",
+        "IA": "Independent A",
+        "IO": "Independent Open",
+        "IW": "Independent World"
+    }
+    
     try:
         page.goto(html_url)
         page.wait_for_timeout(5000)
-        
-        # Wait for actual table rows to appear
-        page.wait_for_selector("tr", timeout=15000)
+        page.wait_for_selector(".schedule-row", timeout=15000)
         
         soup = BeautifulSoup(page.content(), 'html.parser')
         
-        # Debug: print what we find
-        tables = soup.find_all('table')
-        print(f"  Found {len(tables)} tables")
-        
-        for table in tables:
-            for row in table.find_all('tr'):
-                cols = row.find_all('td')
-                print(f"  Row cols: {[c.get_text(strip=True) for c in cols[:4]]}")
-                if len(cols) >= 3:
-                    time_str = cols[0].get_text(strip=True)
-                    name = cols[1].get_text(strip=True)
-                    if "Group" in name or "Class" in name or "Break" in name: continue
-                    g_class = clean_class_name(cols[2].get_text(strip=True))
-                    
-                    combined_data[name] = {
-                        "Guard": name, "Class": g_class,
-                        "Prelims Time": time_str, "Prelims Score": 0.0,
-                        "Finals Time": "", "Finals Score": 0.0
-                    }
+        for row in soup.find_all('div', class_='schedule-row'):
+            # Skip breaks and custom rows
+            if 'schedule-row--custom' in row.get('class', []):
+                continue
+            
+            name_div = row.find('div', class_='schedule-row__name')
+            initials_div = row.find('div', class_='schedule-row__initials')
+            time_div = row.find('div', class_='schedule-row__time')
+            
+            if not name_div or not initials_div or not time_div:
+                continue
+            
+            guard_name = name_div.get_text(strip=True)
+            raw_initials = initials_div.get_text(strip=True)  # e.g. "SA - Round 1"
+            time_str = time_div.get_text(strip=True)
+            
+            # Parse class abbreviation and round
+            parts = raw_initials.split(' - ')
+            base_abbr = parts[0].strip().upper()
+            base_class = class_map.get(base_abbr, base_abbr)
+            
+            if len(parts) > 1:
+                round_part = parts[1].strip()  # e.g. "Round 1"
+                g_class = f"{base_class} - {round_part}"
+            else:
+                g_class = base_class
+            
+            combined_data[guard_name] = {
+                "Guard": guard_name,
+                "Class": g_class,
+                "Prelims Time": time_str,
+                "Prelims Score": 0.0,
+                "Finals Time": "",
+                "Finals Score": 0.0
+            }
+            print(f"➕ Found Guard: {guard_name} ({g_class}) @ {time_str}")
+            
     except Exception as e:
         print(f"⚠️ [WORKER] HTML Parser Failed: {e}")
 
@@ -314,19 +342,40 @@ def count_pdf_finals_spots(pdf_url, class_spots):
 
 def count_html_finals_spots(html_url, class_spots, page):
     print(f"📡 [TRAFFIC COP] Routing to HTML Finals Spot Counter: {html_url}")
+    
+    class_map = {
+        "SRA": "Scholastic Regional A",
+        "SA": "Scholastic A",
+        "SO": "Scholastic Open",
+        "SW": "Scholastic World",
+        "IRA": "Independent Regional A",
+        "IA": "Independent A",
+        "IO": "Independent Open",
+        "IW": "Independent World"
+    }
+    
     try:
         page.goto(html_url)
         page.wait_for_timeout(5000)
+        page.wait_for_selector(".schedule-row", timeout=15000)
+        
         soup = BeautifulSoup(page.content(), 'html.parser')
-        for table in soup.find_all('table'):
-            for row in table.find_all('tr'):
-                cols = row.find_all('td')
-                if len(cols) >= 3:
-                    raw_g_class = cols[2].get_text(strip=True)
-                    if "Class" in raw_g_class or not raw_g_class: continue
-                    g_class = clean_class_name(raw_g_class)
-                    
-                    class_spots[g_class] = class_spots.get(g_class, 0) + 1
+        
+        for row in soup.find_all('div', class_='schedule-row'):
+            if 'schedule-row--custom' in row.get('class', []):
+                continue
+            
+            initials_div = row.find('div', class_='schedule-row__initials')
+            if not initials_div:
+                continue
+            
+            base_abbr = initials_div.get_text(strip=True).split(' - ')[0].strip().upper()
+            base_class = class_map.get(base_abbr, base_abbr)
+            g_class = clean_class_name(base_class)
+            
+            class_spots[g_class] = class_spots.get(g_class, 0) + 1
+            print(f"🎯 Finals Spot Found: {g_class} (Total: {class_spots[g_class]})")
+            
     except Exception as e:
         print(f"⚠️ [WORKER] HTML Finals Parser Failed: {e}")
 
