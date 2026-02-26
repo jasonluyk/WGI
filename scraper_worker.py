@@ -611,9 +611,10 @@ import time
 if __name__ == "__main__":
     print("⚙️ Worker Node Online. Listening for Streamlit commands...")
     
-    # Optional: Clear out any old, stuck commands when booting up
     db["system_state"].delete_many({"type": "scraper_command"})
     
+    last_live_sync = 0
+
     while True:
         # Check the database for a new command from Streamlit
         command = db["system_state"].find_one({"type": "scraper_command"})
@@ -623,19 +624,17 @@ if __name__ == "__main__":
             print(f"\n📥 Received command: {action}")
             
             try:
-                # 1. Auto-Discovery
                 if action == "sync_national":
                     scrape_national_scores()
                 
-                # 2. Live Weekend Event (Schedules & Active Scores)
                 elif action == "sync_live":
                     scrape_live_show(
                         command.get("show_id"), 
                         command.get("prelims_url"), 
                         command.get("finals_url")
                     )
+                    last_live_sync = time.time()
                 
-                # 3. Past Events Archive (Scores Only)
                 elif action == "sync_archive":
                     scrape_archive(
                         command.get("show_id"), 
@@ -652,9 +651,22 @@ if __name__ == "__main__":
             except Exception as e:
                 print(f"❌ [WORKER] Fatal error executing command '{action}': {e}")
             
-            # Delete the command from the database so it only runs once
             db["system_state"].delete_one({"_id": command["_id"]})
             print("⏳ Task complete. Listening for next command...")
+
+        # Auto-resync live scores every 3 minutes if a show is active
+        else:
+            active_show = db["system_state"].find_one({"type": "active_show_name"})
+            if active_show and (time.time() - last_live_sync > 180):
+                print("⏰ Auto-resyncing live scores...")
+                try:
+                    scrape_live_show(
+                        active_show.get("show_id"),
+                        active_show.get("p_url"),
+                        active_show.get("f_url")
+                    )
+                    last_live_sync = time.time()
+                except Exception as e:
+                    print(f"❌ [WORKER] Auto-sync error: {e}")
             
-        # Wait 2 seconds before checking the database again to prevent CPU burnout
         time.sleep(2)
