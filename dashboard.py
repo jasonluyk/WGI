@@ -301,6 +301,16 @@ with tab3:
         st.subheader(f"📊 Live Signal: {show_name}")
     with c2:
         if st.button("🔄 Refresh Now"):
+            active_show = db["system_state"].find_one({"type": "active_show_name"})
+            if active_show:
+                db["system_state"].insert_one({
+                    "type": "scraper_command",
+                    "action": "sync_live",
+                    "show_id": active_show.get("show_id"),
+                    "prelims_url": active_show.get("p_url"),
+                    "finals_url": active_show.get("f_url")
+                })
+                st.toast("🔄 Score refresh requested!")
             st.rerun()
             
     if live_df.empty:
