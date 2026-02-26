@@ -166,7 +166,7 @@ def calculate_advancement(df, event_name, class_spots):
     return df
 
 st.title("🏆 WGI 2026 Color Guard Analytics")
-tab1, tab2, tab3, tab5, tab6, tab4  = st.tabs(["Overview", "National Stats", "Live Hub", "Past Events","Projector", "Admin"])
+tab1, tab2, tab3, tab6, tab5, tab4  = st.tabs(["Overview", "National Comparison", "Live Hub", "Projector", "Past Events" "Admin"])
 
 # --- TAB 1: National Rankings ---
 with tab1:
@@ -215,7 +215,7 @@ with tab1:
 
 # --- TAB 2: Compare Guards (BSI) ---
 with tab2:
-    st.header("BSI Comparison Calculator")
+    st.header("Guard Comparison Calculator")
     if df.empty:
         st.info("Sync national data in the Admin tab first.")
     else:
