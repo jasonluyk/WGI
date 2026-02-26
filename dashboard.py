@@ -402,8 +402,8 @@ with tab3:
             display_df['HasScore'] = display_df['Prelims Score'] > 0.0
             
             display_df = display_df.sort_values(
-                by=["Base Class", "HasScore", "Prelims Score", "SortTime"], 
-                ascending=[True, False, False, True]
+                by=["SortTime"], 
+                ascending=[True]
             )
             
             cols = ['Status', 'Prelims Time', 'Guard', 'Class', 'Prelims Score', 'Finals Score']
