@@ -5,6 +5,7 @@ import pandas as pd
 import pymongo
 from streamlit_autorefresh import st_autorefresh
 from streamlit_cookies_controller import CookieController
+import time
 
 
 
@@ -310,7 +311,8 @@ with tab3:
                     "prelims_url": active_show.get("p_url"),
                     "finals_url": active_show.get("f_url")
                 })
-                st.toast("🔄 Score refresh requested!")
+                with st.spinner("Fetching latest scores..."):
+                    time.sleep(15)
             st.rerun()
             
     if live_df.empty:
