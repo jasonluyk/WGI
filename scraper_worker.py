@@ -532,54 +532,55 @@ def scrape_archive(show_id, event_name):
         print("❌ [WORKER] Archive finished, but no scores were found.")
 
 def scrape_projection(show_name, prelims_url, finals_url):
-    """
-    Lean version of scrape_live_show — same roster + spot parsing,
-    but replaces live scores with season averages from wgi_analytics.
-    """
     print(f"🔮 [WORKER] Building Projection for: {show_name}...")
     combined_data = {}
     class_spots = {}
 
-    # --- PASS 1: Roster from prelims PDF (identical to Live Hub) ---
-    if prelims_url and prelims_url.lower().endswith('.pdf'):
-        parse_pdf_schedule(prelims_url, combined_data)
-    else:
-        db["projection_state"].update_one(
-            {"type": "current_projection"},
-            {"$set": {"status": "failed", "error": "Only PDF schedule URLs are supported."}},
-            upsert=True
-        )
-        return
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(user_agent=USER_AGENT)
+        page = context.new_page()
 
-    if not combined_data:
-        db["projection_state"].update_one(
-            {"type": "current_projection"},
-            {"$set": {"status": "failed", "error": "No guards found in PDF. Is the schedule posted yet?"}},
-            upsert=True
-        )
-        return
+        # --- PASS 1: Roster from prelims (PDF or HTML) ---
+        if prelims_url:
+            if prelims_url.lower().endswith('.pdf'):
+                parse_pdf_schedule(prelims_url, combined_data)
+            else:
+                parse_html_schedule(prelims_url, combined_data, page)
 
-    print(f"✅ Found {len(combined_data)} guards in roster.")
+        if not combined_data:
+            db["projection_state"].update_one(
+                {"type": "current_projection"},
+                {"$set": {"status": "failed", "error": "No guards found. Is the schedule posted yet?"}},
+                upsert=True
+            )
+            browser.close()
+            return
 
-    # --- PASS 2: Finals spot counts from finals PDF (identical to Live Hub) ---
-    if finals_url and finals_url.lower().endswith('.pdf'):
-        count_pdf_finals_spots(finals_url, class_spots)
-        print(f"✅ Finals spots: {class_spots}")
+        print(f"✅ Found {len(combined_data)} guards in roster.")
 
-    # --- PASS 3: Replace live scores with season averages from MongoDB ---
+        # --- PASS 2: Finals spot counts (PDF or HTML) ---
+        if finals_url:
+            if finals_url.lower().endswith('.pdf'):
+                count_pdf_finals_spots(finals_url, class_spots)
+            else:
+                count_html_finals_spots(finals_url, class_spots, page)
+            print(f"✅ Finals spots: {class_spots}")
+
+        browser.close()
+
+    # --- PASS 3: Replace live scores with season averages ---
     for guard_name, guard_data in combined_data.items():
         base_class = guard_data["Class"].split(" - ")[0].strip()
-
         scores = list(db["wgi_analytics"].find(
             {"Guard": guard_name, "Class": base_class},
             {"_id": 0, "Score": 1}
         ))
-
         if scores:
-            avg = round(sum(s["Score"] for s in scores) / len(scores), 3)
-            combined_data[guard_name]["Prelims Score"] = avg
+            combined_data[guard_name]["Prelims Score"] = round(
+                sum(s["Score"] for s in scores) / len(scores), 3
+            )
             combined_data[guard_name]["Shows Attended"] = len(scores)
-        # If no data, Prelims Score stays 0.0 from parse_pdf_schedule
 
     # --- SAVE TO MONGODB ---
     final_list = list(combined_data.values())
