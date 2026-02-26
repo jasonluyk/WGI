@@ -166,7 +166,7 @@ def calculate_advancement(df, event_name, class_spots):
     return df
 
 st.title("🏆 WGI 2026 Color Guard Analytics")
-tab1, tab2, tab3, tab6, tab5, tab4  = st.tabs(["Overview", "National Comparison", "Live Hub", "Projector", "Past Events" "Admin"])
+tab1, tab2, tab3, tab6, tab5, tab4  = st.tabs(["Overview", "National Comparison", "Live Hub", "Projector", "Past Events", "Admin"])
 
 # --- TAB 1: National Rankings ---
 with tab1:
