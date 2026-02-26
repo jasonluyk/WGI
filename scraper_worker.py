@@ -247,11 +247,21 @@ def parse_html_schedule(html_url, combined_data, page):
     print(f"📡 [TRAFFIC COP] Routing to HTML Parser: {html_url}")
     try:
         page.goto(html_url)
-        page.wait_for_timeout(5000) 
+        page.wait_for_timeout(5000)
+        
+        # Wait for actual table rows to appear
+        page.wait_for_selector("tr", timeout=15000)
+        
         soup = BeautifulSoup(page.content(), 'html.parser')
-        for table in soup.find_all('table'):
+        
+        # Debug: print what we find
+        tables = soup.find_all('table')
+        print(f"  Found {len(tables)} tables")
+        
+        for table in tables:
             for row in table.find_all('tr'):
                 cols = row.find_all('td')
+                print(f"  Row cols: {[c.get_text(strip=True) for c in cols[:4]]}")
                 if len(cols) >= 3:
                     time_str = cols[0].get_text(strip=True)
                     name = cols[1].get_text(strip=True)
@@ -259,7 +269,7 @@ def parse_html_schedule(html_url, combined_data, page):
                     g_class = clean_class_name(cols[2].get_text(strip=True))
                     
                     combined_data[name] = {
-                        "Guard": name, "Class": g_class, 
+                        "Guard": name, "Class": g_class,
                         "Prelims Time": time_str, "Prelims Score": 0.0,
                         "Finals Time": "", "Finals Score": 0.0
                     }
