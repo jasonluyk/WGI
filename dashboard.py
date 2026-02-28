@@ -380,10 +380,8 @@ with tab3:
             
             spots = st.number_input(
                 f"Finals Spots for {base_target_class} (Auto-Detected: {auto_detected}):", 
-                min_value=1, 
-                max_value=max(1, guards_in_class), 
+                min_value=0, 
                 value=int(default_spots), 
-                step=1, 
                 key=f"spots_{base_target_class}"
             )
             engine_spots[base_target_class] = spots
